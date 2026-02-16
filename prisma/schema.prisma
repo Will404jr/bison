@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  services  Service[]
+  tellers   Teller[]
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  tickets     Ticket[]
+}
+
+model Teller {
+  id         String    @id @default(cuid())
+  tillNumber Int       @unique
+  pinHash    String?
+  name       String?
+  userId     String?   @unique
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  tickets    Ticket[]
+}
+
+enum TicketStatus {
+  waiting
+  called
+  serving
+  held
+  completed
+}
+
+model Ticket {
+  id               String         @id @default(cuid())
+  ticketNumber     String         @unique
+  serviceId        String
+  service          Service        @relation(fields: [serviceId], references: [id])
+  status           TicketStatus   @default(waiting)
+  callCount        Int            @default(0)
+  calledAt         DateTime?
+  completedAt      DateTime?
+  servedByTellerId String?
+  servedByTeller   Teller?        @relation(fields: [servedByTellerId], references: [id])
+  createdAt        DateTime       @default(now())
+  transactions     TicketTransaction[]
+}
+
+model TicketTransaction {
+  id         String    @id @default(cuid())
+  ticketId   String
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  label      String
+  completedAt DateTime?
+}
