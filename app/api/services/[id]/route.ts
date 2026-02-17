@@ -63,8 +63,17 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
+    const service = await prisma.service.findUnique({
+      where: { id },
+      include: { category: { select: { name: true } } },
+    });
+    if (!service) {
+      return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    }
+    const queueLabel =
+      (service.category?.name ?? "Other") + " - " + service.name;
     const ticketCount = await prisma.ticket.count({
-      where: { serviceId: id },
+      where: { queueLabel },
     });
     if (ticketCount > 0) {
       return NextResponse.json(

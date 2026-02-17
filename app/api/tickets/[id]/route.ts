@@ -9,7 +9,6 @@ async function getTicketAndCheckTeller(
 ) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
-    include: { service: { select: { name: true } } },
   });
   if (!ticket) return null;
   if (ticket.servedByTellerId !== tellerId) return null;

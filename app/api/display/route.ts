@@ -10,15 +10,15 @@ export async function GET() {
     },
     include: {
       servedByTeller: { select: { tillNumber: true } },
-      service: { select: { name: true } },
     },
     orderBy: { calledAt: "asc" },
   });
   const items = tickets.map((t) => ({
     ticketNumber: t.ticketNumber,
     tillNumber: t.servedByTeller!.tillNumber,
-    serviceName: t.service.name,
+    serviceName: t.queueLabel,
     status: t.status,
+    callCount: t.callCount,
   }));
   return NextResponse.json({ tickets: items });
 }

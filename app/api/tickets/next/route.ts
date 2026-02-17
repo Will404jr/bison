@@ -19,43 +19,56 @@ export async function POST(request: Request) {
     });
     categoryId = teller?.categoryId ?? null;
   }
-  const where: {
-    status: typeof TicketStatus.waiting;
-    serviceId?: string;
-    service?: { categoryId: string };
-  } = { status: TicketStatus.waiting };
+  let queueLabels: string[] | null = null;
   if (serviceId && typeof serviceId === "string") {
-    where.serviceId = serviceId;
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+      include: { category: { select: { name: true } } },
+    });
+    if (service) {
+      queueLabels = [(service.category?.name ?? "Other") + " - " + service.name];
+    }
   } else if (categoryId) {
-    where.service = { categoryId };
+    const services = await prisma.service.findMany({
+      where: { categoryId },
+      include: { category: { select: { name: true } } },
+    });
+    queueLabels = services.map(
+      (s) => (s.category?.name ?? "Other") + " - " + s.name
+    );
+  }
+  const where: { status: typeof TicketStatus.waiting; queueLabel?: { in: string[] } } = {
+    status: TicketStatus.waiting,
+  };
+  if (queueLabels?.length) {
+    where.queueLabel = { in: queueLabels };
   }
   const nextTicket = await prisma.ticket.findFirst({
-      where,
-      orderBy: { createdAt: "asc" },
-      include: { service: { select: { name: true } } },
-    });
-    if (!nextTicket) {
-      return NextResponse.json(
-        { error: "No tickets waiting in queue" },
-        { status: 404 }
-      );
-    }
-    const now = new Date();
-    await prisma.ticket.update({
-      where: { id: nextTicket.id },
-      data: {
-        status: TicketStatus.serving,
-        servedByTellerId: session.tellerId,
-        calledAt: now,
-      },
-    });
-    return NextResponse.json({
-      ticket: {
-        id: nextTicket.id,
-        ticketNumber: nextTicket.ticketNumber,
-        serviceName: nextTicket.service.name,
-      },
-    });
+    where,
+    orderBy: { createdAt: "asc" },
+  });
+  if (!nextTicket) {
+    return NextResponse.json(
+      { error: "No tickets waiting in queue" },
+      { status: 404 }
+    );
+  }
+  const now = new Date();
+  await prisma.ticket.update({
+    where: { id: nextTicket.id },
+    data: {
+      status: TicketStatus.serving,
+      servedByTellerId: session.tellerId,
+      calledAt: now,
+    },
+  });
+  return NextResponse.json({
+    ticket: {
+      id: nextTicket.id,
+      ticketNumber: nextTicket.ticketNumber,
+      serviceName: nextTicket.queueLabel,
+    },
+  });
   } catch (e) {
     console.error(e);
     return NextResponse.json(
