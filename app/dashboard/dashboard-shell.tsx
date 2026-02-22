@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Users,
   ListOrdered,
+  Settings,
   PanelLeftClose,
   PanelLeft,
   Home,
@@ -19,6 +20,7 @@ const items = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/dashboard/users", label: "Users", icon: Users },
   { href: "/dashboard/queues", label: "Queues", icon: ListOrdered },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {

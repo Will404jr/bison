@@ -60,8 +60,10 @@ enum TicketStatus {
 
 model Ticket {
   id               String         @id @default(cuid())
-  ticketNumber     String         @unique
+  ticketDay        String         // YYYY-MM-DD so numbers reset per day
+  ticketNumber     String         // A01..A99, B01..B99, etc. unique per day
   queueLabel       String         // "Category Name - Service Name"
+  @@unique([ticketDay, ticketNumber])
   status           TicketStatus   @default(waiting)
   callCount        Int            @default(0)
   calledAt         DateTime?
@@ -78,4 +80,14 @@ model TicketTransaction {
   ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   label      String
   completedAt DateTime?
+}
+
+model AppSettings {
+  id                String   @id @default(cuid())
+  apiKey            String?
+  apiUrl            String?
+  adminUsername     String?
+  adminPasswordHash String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

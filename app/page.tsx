@@ -48,6 +48,12 @@ export default function HomePage() {
           >
             Dashboard
           </Link>
+          <Link
+            href="/settings"
+            className="inline-flex h-12 items-center justify-center rounded-md border border-input bg-background px-6 font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Settings
+          </Link>
         </nav>
       </div>
     </div>

@@ -192,3 +192,15 @@
     letter-spacing: var(--tracking-normal);
   }
 }
+
+@keyframes display-marquee-right-to-left {
+  0% {
+    right: 0;
+  }
+  100% {
+    right: 100%;
+  }
+}
+.animate-display-marquee-right-to-left {
+  animation: display-marquee-right-to-left 25s linear infinite;
+}

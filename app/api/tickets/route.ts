@@ -16,6 +16,15 @@ function getEndOfToday(): Date {
   return d;
 }
 
+/** Today as YYYY-MM-DD (server local date). */
+function getTodayTicketDay(): string {
+  const d = getStartOfToday();
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, "0");
+  const day = d.getDate().toString().padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Parse ticket number like A01, B99, Z99, AA01 into { letters, num }. Format: letters + exactly 2 digits (01–99). */
 function parseDailyTicketNumber(ticketNumber: string): { letters: string; num: number } | null {
   const m = ticketNumber.match(/^([A-Z]+)(\d{2})$/);
@@ -48,63 +57,96 @@ function getNextDailyTicketNumber(lastTicketNumber: string | null): string {
   return nextLetter(letters) + "01";
 }
 
-const MAX_CREATE_RETRIES = 5;
+/** From a list of ticket numbers in daily format, return the one that sorts last (max in sequence). */
+function getMaxDailyTicketNumber(
+  ticketNumbers: string[]
+): string | null {
+  const parsed = ticketNumbers
+    .map((n) => parseDailyTicketNumber(n))
+    .filter((p): p is { letters: string; num: number } => p !== null);
+  if (parsed.length === 0) return null;
+  const toIndex = (letters: string): number => {
+    let n = 0;
+    for (let i = 0; i < letters.length; i++)
+      n = n * 26 + (letters.charCodeAt(i) - 64);
+    return n - 1;
+  };
+  let max = parsed[0];
+  for (let i = 1; i < parsed.length; i++) {
+    const cur = parsed[i];
+    const maxIdx = toIndex(max.letters) * 100 + max.num;
+    const curIdx = toIndex(cur.letters) * 100 + cur.num;
+    if (curIdx > maxIdx) max = cur;
+  }
+  return max.letters + max.num.toString().padStart(2, "0");
+}
+
+const MAX_CREATE_RETRIES = 8;
+const RETRY_DELAY_MS = 80;
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { serviceId } = body as { serviceId?: string };
-    if (!serviceId || typeof serviceId !== "string") {
+    const { serviceId, queueLabel: bodyQueueLabel } = body as {
+      serviceId?: string;
+      queueLabel?: string;
+    };
+    let queueLabel: string;
+    if (bodyQueueLabel != null && typeof bodyQueueLabel === "string" && bodyQueueLabel.trim()) {
+      queueLabel = bodyQueueLabel.trim();
+    } else if (serviceId && typeof serviceId === "string") {
+      const service = await prisma.service.findUnique({
+        where: { id: serviceId },
+        include: { category: { select: { name: true } } },
+      });
+      if (!service) {
+        return NextResponse.json({ error: "Service not found" }, { status: 404 });
+      }
+      queueLabel = (service.category?.name ?? "Other") + " - " + service.name;
+    } else {
       return NextResponse.json(
-        { error: "serviceId is required" },
+        { error: "serviceId or queueLabel is required" },
         { status: 400 }
       );
     }
-    const service = await prisma.service.findUnique({
-      where: { id: serviceId },
-      include: { category: { select: { name: true } } },
-    });
-    if (!service) {
-      return NextResponse.json({ error: "Service not found" }, { status: 404 });
-    }
-    const queueLabel =
-      (service.category?.name ?? "Other") + " - " + service.name;
-    const startOfToday = getStartOfToday();
-    const endOfToday = getEndOfToday();
+    const ticketDay = getTodayTicketDay();
     let lastError: unknown;
     for (let attempt = 0; attempt < MAX_CREATE_RETRIES; attempt++) {
-      const ticketsToday = await prisma.ticket.findMany({
-        where: {
-          createdAt: { gte: startOfToday, lt: endOfToday },
-        },
-        orderBy: { createdAt: "desc" },
-        select: { ticketNumber: true },
-        take: 5000,
-      });
-      const lastDaily = ticketsToday.find(
-        (t) => parseDailyTicketNumber(t.ticketNumber) !== null
-      );
-      const ticketNumber = getNextDailyTicketNumber(
-        lastDaily?.ticketNumber ?? null
-      );
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
+      }
       try {
-        const ticket = await prisma.ticket.create({
-          data: {
-            ticketNumber,
-            queueLabel,
-            status: TicketStatus.waiting,
-          },
+        const result = await prisma.$transaction(async (tx) => {
+          const ticketsToday = await tx.ticket.findMany({
+            where: { ticketDay },
+            select: { ticketNumber: true },
+            take: 5000,
+          });
+          const dailyNumbers = ticketsToday
+            .map((t) => t.ticketNumber)
+            .filter((n) => parseDailyTicketNumber(n) !== null);
+          const maxDaily = getMaxDailyTicketNumber(dailyNumbers);
+          const ticketNumber = getNextDailyTicketNumber(maxDaily);
+          const ticket = await tx.ticket.create({
+            data: {
+              ticketDay,
+              ticketNumber,
+              queueLabel,
+              status: TicketStatus.waiting,
+            },
+          });
+          return { ticket, ticketNumber };
         });
         const waitingCount = await prisma.ticket.count({
           where: {
             queueLabel,
             status: TicketStatus.waiting,
-            createdAt: { lt: ticket.createdAt },
+            createdAt: { lt: result.ticket.createdAt },
           },
         });
         return NextResponse.json({
-          ticketNumber: ticket.ticketNumber,
-          ticketId: ticket.id,
+          ticketNumber: result.ticket.ticketNumber,
+          ticketId: result.ticket.id,
           waitingAhead: waitingCount,
         });
       } catch (e) {
