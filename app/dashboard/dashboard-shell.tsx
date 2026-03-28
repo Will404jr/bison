@@ -47,11 +47,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen gap-0 bg-muted/30">
+    <div className="flex min-h-screen gap-0">
       {/* Floating sidebar: not attached to screen edges */}
       <aside
         className={cn(
-          "fixed left-4 top-4 z-10 flex shrink-0 flex-col rounded-xl border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-lg transition-[width] duration-200 ease-in-out",
+          "fixed left-4 top-4 z-10 flex shrink-0 flex-col rounded-2xl border border-white/10 bg-sidebar/55 text-sidebar-foreground shadow-2xl shadow-black/40 backdrop-blur-2xl backdrop-saturate-150 transition-[width] duration-200 ease-in-out",
           expanded ? "w-52" : "w-16"
         )}
         style={{ height: "calc(100vh - 2rem)" }}

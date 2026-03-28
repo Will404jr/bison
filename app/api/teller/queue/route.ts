@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTellerSession } from "@/lib/auth";
+import { getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
 
 export async function GET() {
@@ -23,19 +24,26 @@ export async function GET() {
         include: { category: { select: { name: true } } },
       })).map((s) => (s.category?.name ?? "Other") + " - " + s.name)
     : [];
-  const [stats, currentTicket, allServices, waitingByQueueLabel] = await Promise.all([
+  const ticketDay = getTodayTicketDay();
+  const categoryFilter =
+    categoryQueueLabels.length > 0
+      ? { queueLabel: { in: categoryQueueLabels } }
+      : {};
+
+  const [stats, currentTicket, allServices, waitingByQueueLabel, noShowToday] =
+    await Promise.all([
     prisma.ticket.groupBy({
       by: ["status"],
       _count: true,
       where: {
-        status: { not: TicketStatus.completed },
-        ...(categoryQueueLabels.length > 0
-          ? { queueLabel: { in: categoryQueueLabels } }
-          : {}),
+        ticketDay,
+        status: { notIn: [TicketStatus.completed, TicketStatus.no_show] },
+        ...categoryFilter,
       },
     }),
     prisma.ticket.findFirst({
       where: {
+        ticketDay,
         servedByTellerId: session.tellerId,
         status: { in: [TicketStatus.serving, TicketStatus.held] },
       },
@@ -51,10 +59,16 @@ export async function GET() {
       by: ["queueLabel"],
       _count: true,
       where: {
+        ticketDay,
         status: TicketStatus.waiting,
-        ...(categoryQueueLabels.length > 0
-          ? { queueLabel: { in: categoryQueueLabels } }
-          : {}),
+        ...categoryFilter,
+      },
+    }),
+    prisma.ticket.count({
+      where: {
+        ticketDay,
+        status: TicketStatus.no_show,
+        ...categoryFilter,
       },
     }),
   ]);
@@ -90,6 +104,7 @@ export async function GET() {
       called: calledCount,
       serving: servingCount,
       held: heldCount,
+      noShow: noShowToday,
     },
     waitingByService,
     services: allServices,

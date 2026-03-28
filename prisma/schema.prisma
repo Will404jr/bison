@@ -48,6 +48,7 @@ model Teller {
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdAt  DateTime  @default(now())
   tickets    Ticket[]
+  breaks     TellerBreak[]
 }
 
 enum TicketStatus {
@@ -56,6 +57,7 @@ enum TicketStatus {
   serving
   held
   completed
+  no_show
 }
 
 model Ticket {
@@ -80,6 +82,15 @@ model TicketTransaction {
   ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   label      String
   completedAt DateTime?
+}
+
+/** Break intervals for a teller (endedAt null = break in progress). */
+model TellerBreak {
+  id        String    @id @default(cuid())
+  tellerId  String
+  teller    Teller    @relation(fields: [tellerId], references: [id], onDelete: Cascade)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
 }
 
 model AppSettings {

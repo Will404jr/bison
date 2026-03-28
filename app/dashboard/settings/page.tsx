@@ -81,12 +81,17 @@ export default function DashboardSettingsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground text-sm">
+      <header className="glass-panel-strong -mx-6 -mt-6 rounded-b-2xl border-x-0 border-t-0 px-8 py-6">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+          Dashboard
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Settings
+        </h1>
+        <p className="text-sm text-muted-foreground">
           Edit API URL, API key, admin username and admin password.
         </p>
-      </div>
+      </header>
 
       <Card>
         <CardHeader>

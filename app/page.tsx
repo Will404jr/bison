@@ -4,7 +4,7 @@ import Image from "next/image";
 export default function HomePage() {
   return (
     <div className="flex min-h-screen">
-      <div className="relative hidden w-1/2 overflow-hidden bg-muted sm:block">
+      <div className="relative hidden w-1/2 overflow-hidden bg-blend-void sm:block">
         <Image
           src="/market.jpg"
           alt=""
@@ -14,12 +14,26 @@ export default function HomePage() {
           sizes="50vw"
         />
         <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gradient-to-t from-blend-void/80 via-blend-void/15 to-background/40" />
+        <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-card/45 px-8 py-5 text-foreground backdrop-blur-2xl">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            QMS
+          </p>
+          <p className="text-lg font-semibold leading-snug">
+            Branch queue hub
+          </p>
+        </div>
       </div>
 
-      <div className="flex w-full flex-col justify-center gap-8 px-8 py-12 sm:w-1/2 sm:max-w-md sm:px-12 lg:px-16">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Queue management
-        </h1>
+      <div className="glass-panel flex w-full flex-col justify-center gap-8 rounded-none px-8 py-12 sm:w-1/2 sm:max-w-md sm:rounded-l-3xl sm:border-l sm:px-12 lg:px-16">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Welcome
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Queue management
+          </h1>
+        </div>
         <nav
           className="flex flex-col gap-4"
           aria-label="Main"

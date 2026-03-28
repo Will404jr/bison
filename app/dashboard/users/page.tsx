@@ -191,14 +191,21 @@ export default function DashboardUsersPage() {
 
   return (
     <div className="p-6">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <header className="glass-panel-strong -mx-6 -mt-6 mb-8 flex flex-col gap-4 rounded-b-2xl border-x-0 border-t-0 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Dashboard
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Users
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Add and manage dashboard users (email, username, password)
           </p>
         </div>
-        <Button onClick={openAdd}>Add user</Button>
+        <Button onClick={openAdd} variant="outline">
+          Add user
+        </Button>
       </header>
 
       {(error || success) && (

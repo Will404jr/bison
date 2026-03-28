@@ -76,10 +76,19 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-6">
+    <div className="flex min-h-screen flex-col">
+      <header className="glass-panel-strong border-x-0 border-t-0 px-6 py-5 sm:px-10">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+          Administration
+        </p>
+        <h1 className="text-xl font-semibold text-foreground">
+          App settings
+        </h1>
+      </header>
+      <div className="flex flex-1 flex-col items-center justify-center p-6">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>App settings</CardTitle>
+          <CardTitle>API & credentials</CardTitle>
           <CardDescription>
             API URL, API key, admin username and admin password. Leave password blank to keep the current one.
           </CardDescription>
@@ -158,6 +167,7 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

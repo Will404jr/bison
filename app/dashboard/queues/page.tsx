@@ -270,18 +270,34 @@ export default function DashboardQueuesPage() {
 
   return (
     <div className="p-6">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <header className="glass-panel-strong -mx-6 -mt-6 mb-8 flex flex-col gap-4 rounded-b-2xl border-x-0 border-t-0 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Queues</h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Dashboard
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Queues
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Organise queues under categories (e.g. Teller Services → Deposit, Withdraw)
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setCategoryName(""); setAddCategoryOpen(true); }}>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setCategoryName("");
+              setAddCategoryOpen(true);
+            }}
+          >
             Add category
           </Button>
-          <Button onClick={() => { resetQueueForm(); setAddQueueOpen(true); }}>
+          <Button
+            onClick={() => {
+              resetQueueForm();
+              setAddQueueOpen(true);
+            }}
+          >
             Add queue
           </Button>
         </div>

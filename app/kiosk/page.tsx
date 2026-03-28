@@ -56,6 +56,10 @@ type Category = {
   services: Service[];
 };
 
+/** Full-width touch row for kiosk menus (vertical list). */
+const kioskMenuButtonClass =
+  "flex w-full min-h-[min(22vh,11rem)] items-center justify-between gap-6 rounded-2xl border-2 border-border bg-card/90 px-8 py-6 text-left text-xl font-semibold shadow-md backdrop-blur-sm transition-colors hover:border-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.995] sm:min-h-[9.5rem] sm:px-10 sm:text-2xl";
+
 export default function KioskPage() {
   const [useExternal, setUseExternal] = useState(false);
   const [externalContent, setExternalContent] = useState<ExternalContent | null>(null);
@@ -206,40 +210,42 @@ export default function KioskPage() {
   // ——— Ticket result screen (shared) ———
   if (selectedTicket) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-6 sm:p-8">
-        <Card className="w-full max-w-lg border-2 shadow-lg">
-          <CardHeader className="space-y-1 pb-2 text-center">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/15 text-primary">
-              <Ticket className="size-8" aria-hidden />
-            </div>
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              Your ticket
-            </CardTitle>
-            <CardDescription className="text-base">
-              Wait for your number to be called at the display
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-6 pb-8 pt-2">
-            <div
-              className="rounded-xl bg-primary px-10 py-6 text-5xl font-bold tracking-tight text-primary-foreground shadow-md sm:text-6xl"
-              aria-live="polite"
-            >
-              {selectedTicket.ticketNumber}
-            </div>
-            {selectedTicket.waitingAhead > 0 && (
-              <p className="text-muted-foreground text-sm">
-                Approximately {selectedTicket.waitingAhead} people ahead of you
-              </p>
-            )}
-            <Button
-              size="lg"
-              onClick={() => setSelectedTicket(null)}
-              className="h-12 w-full max-w-xs text-base"
-            >
-              Get another ticket
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-dvh flex-col">
+        <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10">
+          <Card className="w-full max-w-2xl border-2 shadow-lg">
+            <CardHeader className="space-y-2 pb-2 text-center">
+              <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-primary/15 text-primary sm:size-24">
+                <Ticket className="size-10 sm:size-12" aria-hidden />
+              </div>
+              <CardTitle className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                Your ticket
+              </CardTitle>
+              <CardDescription className="text-lg sm:text-xl">
+                Wait for your number to be called at the display
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-8 pb-10 pt-4">
+              <div
+                className="rounded-2xl bg-primary px-12 py-8 text-6xl font-bold tracking-tight text-primary-foreground shadow-lg sm:text-7xl"
+                aria-live="polite"
+              >
+                {selectedTicket.ticketNumber}
+              </div>
+              {selectedTicket.waitingAhead > 0 && (
+                <p className="text-center text-lg text-muted-foreground">
+                  Approximately {selectedTicket.waitingAhead} people ahead of you
+                </p>
+              )}
+              <Button
+                size="lg"
+                onClick={() => setSelectedTicket(null)}
+                className="h-16 w-full max-w-md text-xl"
+              >
+                Get another ticket
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -248,14 +254,14 @@ export default function KioskPage() {
   if (useExternal && externalContent) {
     const logoUrl = externalContent.logo?.url;
     return (
-      <div className="flex min-h-screen flex-col bg-muted/40 p-4 sm:p-6">
-        <div className="mx-auto w-full max-w-3xl flex-1 flex flex-col">
+      <div className="flex min-h-dvh flex-col">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col p-6 sm:p-10">
           {logoUrl && (
-            <div className="mb-6 flex justify-center">
+            <div className="mb-8 flex justify-center">
               <img
                 src={logoUrl}
                 alt=""
-                className="max-h-20 w-auto object-contain"
+                className="max-h-24 w-auto object-contain sm:max-h-28"
               />
             </div>
           )}
@@ -263,7 +269,7 @@ export default function KioskPage() {
           {externalLevel > 0 && (
             <Button
               variant="ghost"
-              className="-ml-2 mb-4 h-11 gap-2 self-start text-muted-foreground hover:text-foreground"
+              className="mb-6 h-14 gap-3 self-start px-4 text-lg text-muted-foreground hover:text-foreground sm:h-16 sm:text-xl"
               onClick={() => {
                 if (externalLevel === 1) {
                   setExternalLevel(0);
@@ -275,28 +281,28 @@ export default function KioskPage() {
               }}
               aria-label="Back"
             >
-              <ChevronLeft className="size-5" />
+              <ChevronLeft className="size-7 sm:size-8" />
               Back
             </Button>
           )}
 
-          <Card className="flex-1 border-2 shadow-md">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold tracking-tight sm:text-2xl">
+          <Card className="flex-1 border-2 shadow-lg">
+            <CardHeader className="pb-6">
+              <CardTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {externalLevel === 0 && "Select a category"}
                 {externalLevel === 1 && selectedQueue?.title}
                 {externalLevel === 2 && selectedSubItem?.title}
               </CardTitle>
-              <CardDescription className="text-sm sm:text-base">
+              <CardDescription className="text-base sm:text-lg">
                 {externalLevel === 2 && sortedSubSubItems.length === 0
                   ? "Tap below to get your ticket"
                   : "Tap an option to continue or get your ticket"}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-col gap-4 sm:gap-5">
               {error && (
                 <p
-                  className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive"
+                  className="rounded-xl bg-destructive/10 px-5 py-3 text-base text-destructive"
                   role="alert"
                 >
                   {error}
@@ -304,7 +310,7 @@ export default function KioskPage() {
               )}
 
               {externalLevel === 0 && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-4 sm:gap-5">
                   {externalQueues.map((q) => (
                     <button
                       key={q.id}
@@ -314,20 +320,18 @@ export default function KioskPage() {
                         setSelectedSubItem(null);
                         setExternalLevel(1);
                       }}
-                      className="flex min-h-[88px] items-center justify-between gap-4 rounded-xl border-2 border-border bg-card px-5 py-4 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className={kioskMenuButtonClass}
                       aria-label={`Open ${q.title}`}
                     >
-                      <span className="font-semibold text-foreground text-lg">
-                        {q.title}
-                      </span>
-                      <ChevronRight className="size-6 shrink-0 text-muted-foreground" />
+                      <span className="text-foreground">{q.title}</span>
+                      <ChevronRight className="size-8 shrink-0 text-muted-foreground sm:size-10" />
                     </button>
                   ))}
                 </div>
               )}
 
               {externalLevel === 1 && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-4 sm:gap-5">
                   {sortedSubItems.map((sub) => {
                     const hasSubSub = sub.subSubItems && sub.subSubItems.length > 0;
                     const pathSoFar = `${selectedQueue!.title} - ${sub.title}`;
@@ -344,16 +348,14 @@ export default function KioskPage() {
                           }
                         }}
                         disabled={!!submitting}
-                        className="flex min-h-[88px] items-center justify-between gap-4 rounded-xl border-2 border-border bg-card px-5 py-4 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
+                        className={`${kioskMenuButtonClass} disabled:opacity-70`}
                         aria-label={hasSubSub ? `Open ${sub.title}` : `Get ticket for ${pathSoFar}`}
                       >
-                        <span className="font-semibold text-foreground text-lg">
-                          {sub.title}
-                        </span>
+                        <span className="text-foreground">{sub.title}</span>
                         {hasSubSub ? (
-                          <ChevronRight className="size-6 shrink-0 text-muted-foreground" />
+                          <ChevronRight className="size-8 shrink-0 text-muted-foreground sm:size-10" />
                         ) : submitting === pathSoFar ? (
-                          <span className="text-muted-foreground text-xs">
+                          <span className="text-muted-foreground text-lg">
                             Please wait…
                           </span>
                         ) : null}
@@ -364,7 +366,7 @@ export default function KioskPage() {
               )}
 
               {externalLevel === 2 && (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-4 sm:gap-5">
                   {sortedSubSubItems.length > 0 ? (
                     sortedSubSubItems.map((subSub) => {
                       const path = `${selectedQueue!.title} - ${selectedSubItem!.title} - ${subSub.title}`;
@@ -373,14 +375,14 @@ export default function KioskPage() {
                           key={subSub.id}
                           size="lg"
                           variant="outline"
-                          className="h-auto min-h-[88px] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 py-5 text-base"
+                          className={`${kioskMenuButtonClass} h-auto min-h-[min(22vh,11rem)] flex-col justify-center gap-2 text-center sm:min-h-[9.5rem]`}
                           onClick={() => handleExternalLeaf(path)}
                           disabled={!!submitting}
                           aria-label={`Get ticket for ${path}`}
                         >
-                          <span className="font-semibold">{subSub.title}</span>
+                          <span>{subSub.title}</span>
                           {submitting === path && (
-                            <span className="text-muted-foreground text-xs">
+                            <span className="text-muted-foreground text-base font-normal">
                               Please wait…
                             </span>
                           )}
@@ -391,7 +393,7 @@ export default function KioskPage() {
                     <Button
                       size="lg"
                       variant="outline"
-                      className="h-auto min-h-[88px] rounded-xl border-2"
+                      className={kioskMenuButtonClass}
                       onClick={() =>
                         handleExternalLeaf(
                           `${selectedQueue!.title} - ${selectedSubItem!.title}`
@@ -415,65 +417,63 @@ export default function KioskPage() {
   // ——— Internal: categories → queues (existing flow) ———
   if (selectedCategory !== null) {
     return (
-      <div className="flex min-h-screen flex-col bg-muted/40 p-4 sm:p-6">
-        <div className="mx-auto w-full max-w-3xl flex-1 flex flex-col">
+      <div className="flex min-h-dvh flex-col">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col p-6 sm:p-10">
           <Button
             variant="ghost"
-            className="-ml-2 mb-4 h-11 gap-2 self-start text-muted-foreground hover:text-foreground"
+            className="mb-6 h-14 gap-3 self-start px-4 text-lg text-muted-foreground hover:text-foreground sm:h-16 sm:text-xl"
             onClick={() => setSelectedCategory(null)}
             aria-label="Back to categories"
           >
-            <ChevronLeft className="size-5" />
+            <ChevronLeft className="size-7 sm:size-8" />
             Back to categories
           </Button>
-          <Card className="flex-1 border-2 shadow-md">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-semibold tracking-tight sm:text-2xl">
+          <Card className="flex-1 border-2 shadow-lg">
+            <CardHeader className="pb-6">
+              <CardTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
                 {currentCategoryName}
               </CardTitle>
-              <CardDescription className="text-sm sm:text-base">
+              <CardDescription className="text-base sm:text-lg">
                 Tap a queue to get your ticket number
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-col gap-4 sm:gap-5">
               {error && (
                 <p
-                  className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive"
+                  className="rounded-xl bg-destructive/10 px-5 py-3 text-base text-destructive"
                   role="alert"
                 >
                   {error}
                 </p>
               )}
               {currentInternalQueues.length === 0 ? (
-                <p className="py-8 text-center text-muted-foreground">
+                <p className="py-12 text-center text-lg text-muted-foreground">
                   No queues in this category right now.
                 </p>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {currentInternalQueues.map((s) => (
-                    <Button
-                      key={s.id}
-                      size="lg"
-                      variant="outline"
-                      className="h-auto min-h-[88px] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 py-5 text-base transition-colors hover:border-primary hover:bg-primary/5"
-                      onClick={() => takeTicketWithServiceId(s.id)}
-                      disabled={!!submitting}
-                      aria-label={`Get ticket for ${s.name}`}
-                    >
-                      <span className="font-semibold">{s.name}</span>
-                      {s.description && (
-                        <span className="text-muted-foreground text-xs font-normal leading-tight">
-                          {s.description}
-                        </span>
-                      )}
-                      {submitting === s.id && (
-                        <span className="text-muted-foreground text-xs">
-                          Please wait…
-                        </span>
-                      )}
-                    </Button>
-                  ))}
-                </div>
+                currentInternalQueues.map((s) => (
+                  <Button
+                    key={s.id}
+                    size="lg"
+                    variant="outline"
+                    className="h-auto min-h-[min(22vh,11rem)] w-full flex-col justify-center gap-2 rounded-2xl border-2 py-6 text-xl font-semibold hover:border-primary hover:bg-primary/10 sm:min-h-[9.5rem] sm:text-2xl"
+                    onClick={() => takeTicketWithServiceId(s.id)}
+                    disabled={!!submitting}
+                    aria-label={`Get ticket for ${s.name}`}
+                  >
+                    <span>{s.name}</span>
+                    {s.description && (
+                      <span className="max-w-full px-4 text-center text-base font-normal leading-snug text-muted-foreground sm:text-lg">
+                        {s.description}
+                      </span>
+                    )}
+                    {submitting === s.id && (
+                      <span className="text-base text-muted-foreground">
+                        Please wait…
+                      </span>
+                    )}
+                  </Button>
+                ))
               )}
             </CardContent>
           </Card>
@@ -484,66 +484,62 @@ export default function KioskPage() {
 
   // ——— Internal: category list (initial) ———
   return (
-    <div className="flex min-h-screen flex-col bg-muted/40 p-4 sm:p-6">
-      <div className="mx-auto w-full max-w-3xl flex-1 flex flex-col justify-center">
+    <div className="flex min-h-dvh flex-col">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center p-6 sm:p-10">
         <Card className="border-2 shadow-lg">
-          <CardHeader className="space-y-1 pb-6 text-center sm:pb-8">
-            <CardTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <CardHeader className="space-y-2 pb-8 text-center sm:pb-10">
+            <CardTitle className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Select a category
             </CardTitle>
-            <CardDescription className="text-base text-muted-foreground">
+            <CardDescription className="text-lg text-muted-foreground sm:text-xl">
               Choose a category to see available queues and get your ticket
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="flex flex-col gap-4 pb-8 sm:gap-5 sm:pb-10">
             {loading && (
-              <p className="py-12 text-center text-muted-foreground">
+              <p className="py-16 text-center text-xl text-muted-foreground">
                 Loading…
               </p>
             )}
             {error && (
               <p
-                className="rounded-lg bg-destructive/10 px-4 py-3 text-center text-destructive"
+                className="rounded-xl bg-destructive/10 px-5 py-4 text-center text-lg text-destructive"
                 role="alert"
               >
                 {error}
               </p>
             )}
             {!loading && !hasInternalMenu && (
-              <p className="py-12 text-center text-muted-foreground">
+              <p className="py-16 text-center text-lg text-muted-foreground">
                 No queues available at the moment. Please try again later.
               </p>
             )}
             {!loading && hasInternalMenu && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <>
                 {categoriesWithQueues.map((category) => (
                   <button
                     key={category.id}
                     type="button"
                     onClick={() => setSelectedCategory(category)}
-                    className="flex min-h-[100px] items-center justify-between gap-4 rounded-xl border-2 border-border bg-card px-5 py-4 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={kioskMenuButtonClass}
                     aria-label={`Open ${category.name} queues`}
                   >
-                    <span className="font-semibold text-foreground text-lg">
-                      {category.name}
-                    </span>
-                    <ChevronRight className="size-6 shrink-0 text-muted-foreground" />
+                    <span className="text-foreground">{category.name}</span>
+                    <ChevronRight className="size-8 shrink-0 text-muted-foreground sm:size-10" />
                   </button>
                 ))}
                 {hasOther && (
                   <button
                     type="button"
                     onClick={() => setSelectedCategory("other")}
-                    className="flex min-h-[100px] items-center justify-between gap-4 rounded-xl border-2 border-border bg-card px-5 py-4 text-left shadow-sm transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className={kioskMenuButtonClass}
                     aria-label="Open other services queues"
                   >
-                    <span className="font-semibold text-foreground text-lg">
-                      Other services
-                    </span>
-                    <ChevronRight className="size-6 shrink-0 text-muted-foreground" />
+                    <span className="text-foreground">Other services</span>
+                    <ChevronRight className="size-8 shrink-0 text-muted-foreground sm:size-10" />
                   </button>
                 )}
-              </div>
+              </>
             )}
           </CardContent>
         </Card>

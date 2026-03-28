@@ -26,7 +26,10 @@ export async function PATCH(
   const { id } = await params;
   try {
     const body = await request.json();
-    const { action } = body as { action?: string };
+    const { action, targetTellerId } = body as {
+      action?: string;
+      targetTellerId?: string;
+    };
     const ticket = await getTicketAndCheckTeller(id, session.tellerId);
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -68,6 +71,77 @@ export async function PATCH(
       await prisma.ticket.update({
         where: { id },
         data: { status: TicketStatus.serving },
+      });
+      return NextResponse.json({ success: true, status: TicketStatus.serving });
+    }
+    if (action === "noShow") {
+      if (
+        ticket.status !== TicketStatus.serving &&
+        ticket.status !== TicketStatus.held
+      ) {
+        return NextResponse.json(
+          { error: "Only serving or held tickets can be marked no show" },
+          { status: 400 }
+        );
+      }
+      await prisma.ticket.update({
+        where: { id },
+        data: {
+          status: TicketStatus.no_show,
+          completedAt: new Date(),
+        },
+      });
+      return NextResponse.json({ success: true, status: TicketStatus.no_show });
+    }
+    if (action === "redirect") {
+      if (
+        ticket.status !== TicketStatus.serving &&
+        ticket.status !== TicketStatus.held
+      ) {
+        return NextResponse.json(
+          { error: "Only serving or held tickets can be redirected" },
+          { status: 400 }
+        );
+      }
+      if (!targetTellerId || typeof targetTellerId !== "string") {
+        return NextResponse.json(
+          { error: "targetTellerId is required" },
+          { status: 400 }
+        );
+      }
+      if (targetTellerId === session.tellerId) {
+        return NextResponse.json(
+          { error: "Cannot redirect to the same till" },
+          { status: 400 }
+        );
+      }
+      const target = await prisma.teller.findUnique({
+        where: { id: targetTellerId },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "Target till not found" }, { status: 404 });
+      }
+      const busy = await prisma.ticket.findFirst({
+        where: {
+          ticketDay: ticket.ticketDay,
+          servedByTellerId: targetTellerId,
+          status: { in: [TicketStatus.serving, TicketStatus.held] },
+        },
+      });
+      if (busy) {
+        return NextResponse.json(
+          { error: "That till already has an active ticket" },
+          { status: 409 }
+        );
+      }
+      const now = new Date();
+      await prisma.ticket.update({
+        where: { id },
+        data: {
+          servedByTellerId: targetTellerId,
+          status: TicketStatus.serving,
+          calledAt: now,
+        },
       });
       return NextResponse.json({ success: true, status: TicketStatus.serving });
     }

@@ -32,16 +32,19 @@ export default function DashboardHomePage() {
 
   return (
     <div className="p-6">
-      <header className="mb-8 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <header className="glass-panel-strong -mx-6 -mt-6 mb-8 flex flex-col gap-4 rounded-b-2xl border-x-0 border-t-0 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Dashboard
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Hello, welcome back
           </h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Here’s an overview of your queue management system
           </p>
         </div>
-        <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
+        <span className="glass-panel inline-flex w-fit items-center gap-1.5 rounded-full border-0 px-3 py-1 text-xs font-medium text-primary shadow-none">
           <span className="size-1.5 rounded-full bg-primary" />
           System active
         </span>
@@ -73,7 +76,7 @@ export default function DashboardHomePage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="border-primary/25 shadow-lg shadow-black/20 ring-1 ring-primary/20">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>

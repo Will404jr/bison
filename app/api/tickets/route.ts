@@ -1,29 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
-
-/** Start of today in server local time (YYYY-MM-DD 00:00:00). */
-function getStartOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/** End of today (start of next day). */
-function getEndOfToday(): Date {
-  const d = getStartOfToday();
-  d.setDate(d.getDate() + 1);
-  return d;
-}
-
-/** Today as YYYY-MM-DD (server local date). */
-function getTodayTicketDay(): string {
-  const d = getStartOfToday();
-  const y = d.getFullYear();
-  const m = (d.getMonth() + 1).toString().padStart(2, "0");
-  const day = d.getDate().toString().padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 /** Parse ticket number like A01, B99, Z99, AA01 into { letters, num }. Format: letters + exactly 2 digits (01–99). */
 function parseDailyTicketNumber(ticketNumber: string): { letters: string; num: number } | null {
@@ -139,6 +117,7 @@ export async function POST(request: Request) {
         });
         const waitingCount = await prisma.ticket.count({
           where: {
+            ticketDay,
             queueLabel,
             status: TicketStatus.waiting,
             createdAt: { lt: result.ticket.createdAt },

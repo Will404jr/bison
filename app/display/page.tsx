@@ -102,10 +102,10 @@ function formatTime(d: Date): { h: string; m: string; s: string } {
 function FlipDigit({ value }: { value: string }) {
   return (
     <div
-      className="flex h-12 w-11 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-800 shadow-inner sm:h-14 sm:w-12"
+      className="flex h-12 w-11 items-center justify-center rounded-lg border border-white/15 bg-card/45 shadow-inner backdrop-blur-md sm:h-14 sm:w-12"
       aria-hidden
     >
-      <span className="text-2xl font-bold tabular-nums text-white sm:text-3xl">{value}</span>
+      <span className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">{value}</span>
     </div>
   );
 }
@@ -116,9 +116,9 @@ function FlipClock() {
   return (
     <div className="flex items-center gap-1 sm:gap-2" role="timer" aria-label={`Time: ${h}:${m}:${s}`}>
       <FlipDigit value={h} />
-      <span className="text-xl text-zinc-500">:</span>
+      <span className="text-xl text-muted-foreground">:</span>
       <FlipDigit value={m} />
-      <span className="text-xl text-zinc-500">:</span>
+      <span className="text-xl text-muted-foreground">:</span>
       <FlipDigit value={s} />
     </div>
   );
@@ -130,7 +130,7 @@ function AnnouncementMarquee({ text }: { text: string }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div
-        className="absolute top-1/2 w-max -translate-y-1/2 whitespace-nowrap pr-8 text-xl font-medium will-change-[right] sm:text-2xl animate-display-marquee-right-to-left"
+        className="absolute top-1/2 w-max -translate-y-1/2 whitespace-nowrap pr-8 text-xl font-medium text-foreground will-change-[right] sm:text-2xl animate-display-marquee-right-to-left"
         style={{ right: 0 }}
       >
         {displayText}
@@ -359,29 +359,33 @@ export default function DisplayPage() {
 
   if (loading && tickets.length === 0 && !external) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-900 text-white">
-        <p className="text-xl">Loading…</p>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="glass-panel-strong rounded-2xl px-12 py-10">
+          <p className="text-xl text-foreground">Loading…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-900 text-white">
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-card/30 to-background text-foreground">
       {/* Top bar: announcement type (full height) | marquee | time */}
-      <header className="flex shrink-0 items-stretch gap-0 border-b border-zinc-700 bg-zinc-800/80">
+      <header className="flex shrink-0 items-stretch gap-0 border-b border-white/10 bg-card/35 backdrop-blur-xl backdrop-saturate-150">
         <div
-          className="flex w-36 shrink-0 items-center justify-center rounded-none px-4 sm:w-44"
+          className={`flex w-36 shrink-0 items-center justify-center rounded-none px-4 sm:w-44 ${announcementTypeStyle ? "" : "surface-ribbon"}`}
           style={announcementTypeStyle}
         >
           <span className="text-center text-base font-bold uppercase tracking-wide sm:text-lg">
             {announcementTypeName}
           </span>
         </div>
-        <div className="min-h-[3.5rem] min-w-0 flex-1 py-2">
+        <div className="glass-panel m-1.5 min-h-[3.5rem] min-w-0 flex-1 rounded-xl py-2">
           <AnnouncementMarquee text={announcementText} />
         </div>
-        <div className="flex shrink-0 items-center p-3">
-          <FlipClock />
+        <div className="flex shrink-0 items-center p-2 sm:p-3">
+          <div className="glass-panel-strong rounded-xl px-2 py-1.5 sm:px-3 sm:py-2">
+            <FlipClock />
+          </div>
         </div>
       </header>
 
@@ -390,7 +394,7 @@ export default function DisplayPage() {
         {/* Left column: ads (fits in space) + tickets bar at bottom */}
         <div className="flex min-w-0 flex-1 flex-col min-h-0">
           {/* Ads - one at a time, rotate on end (postMessage adEnded/videoEnded) or timer. Mute control for iframe. */}
-          <section className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden border-b border-zinc-700 bg-zinc-800/40 p-4">
+          <section className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden border-b border-white/10 bg-card/15 p-4 backdrop-blur-sm">
             {currentAd ? (
               (() => {
                 const item = typeof currentAd === "string" ? { displayUrl: currentAd } : currentAd;
@@ -400,7 +404,7 @@ export default function DisplayPage() {
                 return (
                   <div
                     key={currentAdIndex}
-                    className="relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-xl bg-zinc-700 p-2"
+                    className="glass-panel relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-xl p-2"
                   >
                     <iframe
                       ref={adIframeRef}
@@ -419,7 +423,7 @@ export default function DisplayPage() {
                     <button
                       type="button"
                       onClick={toggleMute}
-                      className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 focus:outline-none focus:ring-2 focus:ring-white/50"
+                      className="glass-panel-strong absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full text-foreground transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-primary/50"
                       aria-label={isMuted ? "Unmute ad" : "Mute ad"}
                       title={isMuted ? "Unmute" : "Mute"}
                     >
@@ -433,7 +437,7 @@ export default function DisplayPage() {
                 );
               })()
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-zinc-500">
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                 <span className="text-sm">Ad space</span>
               </div>
             )}
@@ -441,29 +445,29 @@ export default function DisplayPage() {
 
           {/* Tickets bar - fixed height at bottom of left column */}
           <footer
-            className="flex min-h-[5.5rem] shrink-0 items-center gap-4 border-t border-zinc-700 bg-zinc-800/80 px-4 py-4"
+            className="glass-panel-strong mx-2 mb-2 flex min-h-[5.5rem] shrink-0 items-center gap-4 rounded-t-2xl px-4 py-4"
             aria-live="polite"
             aria-atomic="true"
           >
             {error && (
-              <p className="text-sm text-red-400" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {error}
               </p>
             )}
             {tickets.length === 0 ? (
-              <p className="text-zinc-500">No tickets currently being served</p>
+              <p className="text-muted-foreground">No tickets currently being served</p>
             ) : (
               <div className="flex flex-wrap items-center justify-center gap-6">
                 {tickets.map((t) => (
                   <div
                     key={`${t.ticketNumber}-${t.tillNumber}`}
-                    className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-800/80 px-6 py-3"
+                    className="glass-panel-strong flex shrink-0 items-center gap-2 rounded-2xl px-6 py-3"
                   >
-                    <span className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
+                    <span className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
                       {t.ticketNumber}
                     </span>
-                    <span className="text-3xl text-zinc-400 sm:text-4xl">→</span>
-                    <span className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
+                    <span className="text-3xl text-primary sm:text-4xl">→</span>
+                    <span className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
                       {t.tillNumber}
                     </span>
                   </div>
@@ -474,14 +478,16 @@ export default function DisplayPage() {
         </div>
 
         {/* Forex - full height from below header to bottom of screen */}
-        <aside className="flex h-full min-w-[26rem] shrink-0 flex-col border-l border-zinc-700 bg-zinc-800/60 sm:min-w-[30rem]">
-          <div className="border-b border-zinc-600 px-4 py-3">
-            <h2 className="text-base font-semibold uppercase tracking-wide text-amber-400 sm:text-lg">Forex</h2>
+        <aside className="flex h-full min-w-[26rem] shrink-0 flex-col border-l border-white/15 bg-card/40 text-card-foreground backdrop-blur-2xl backdrop-saturate-150 sm:min-w-[30rem]">
+          <div className="border-b border-white/10 bg-card/30 px-4 py-3 backdrop-blur-md">
+            <h2 className="text-base font-semibold uppercase tracking-wide text-primary sm:text-lg">
+              Forex
+            </h2>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             {forex.length > 0 ? (
               <table className="w-full text-left text-xl sm:text-2xl">
-                <thead className="sticky top-0 bg-zinc-800 text-zinc-400">
+                <thead className="sticky top-0 z-[1] bg-muted text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium"></th>
                     <th className="px-4 py-3 font-medium"></th>
@@ -491,17 +497,20 @@ export default function DisplayPage() {
                 </thead>
                 <tbody>
                   {forex.map((row, i) => (
-                    <tr key={i} className="border-t border-zinc-700/80">
-                      <td className="px-4 py-2.5 font-extrabold text-white">
+                    <tr
+                      key={i}
+                      className={`border-b border-border ${i % 2 === 0 ? "bg-background" : "bg-muted/40"}`}
+                    >
+                      <td className="px-4 py-2.5 font-extrabold text-foreground">
                         {row.countryCode ?? "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-zinc-300 font-extrabold">
+                      <td className="px-4 py-2.5 font-extrabold text-foreground/90">
                         {row.moneyCode ?? "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-zinc-300 tabular-nums font-extrabold">
+                      <td className="px-4 py-2.5 font-extrabold tabular-nums text-foreground/90">
                         {row.buyingPrice != null ? String(row.buyingPrice) : "—"}
                       </td>
-                      <td className="px-4 py-2.5 text-zinc-300 tabular-nums font-extrabold">
+                      <td className="px-4 py-2.5 font-extrabold tabular-nums text-foreground/90">
                         {row.sellingPrice != null ? String(row.sellingPrice) : "—"}
                       </td>
                     </tr>
@@ -509,7 +518,7 @@ export default function DisplayPage() {
                 </tbody>
               </table>
             ) : (
-              <div className="flex h-full items-center justify-center p-4 text-center text-zinc-500 text-base">
+              <div className="flex h-full items-center justify-center p-4 text-center text-base text-muted-foreground">
                 No forex data
               </div>
             )}

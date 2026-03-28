@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
 
 export async function GET() {
+  const ticketDay = getTodayTicketDay();
   const tickets = await prisma.ticket.findMany({
     where: {
+      ticketDay,
       status: { in: [TicketStatus.called, TicketStatus.serving] },
       servedByTellerId: { not: null },
     },

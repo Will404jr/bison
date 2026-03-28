@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTellerSession } from "@/lib/auth";
+import { getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
 
 export async function POST(request: Request) {
@@ -37,7 +38,13 @@ export async function POST(request: Request) {
       (s) => (s.category?.name ?? "Other") + " - " + s.name
     );
   }
-  const where: { status: typeof TicketStatus.waiting; queueLabel?: { in: string[] } } = {
+  const ticketDay = getTodayTicketDay();
+  const where: {
+    ticketDay: string;
+    status: typeof TicketStatus.waiting;
+    queueLabel?: { in: string[] };
+  } = {
+    ticketDay,
     status: TicketStatus.waiting,
   };
   if (queueLabels?.length) {

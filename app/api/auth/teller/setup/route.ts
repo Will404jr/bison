@@ -29,10 +29,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Category not found" }, { status: 400 });
       }
     }
-    await prisma.teller.update({
-      where: { id: teller.id },
-      data: { userId: session.userId, categoryId: categoryIdTrimmed },
-    });
+    await prisma.$transaction([
+      prisma.teller.updateMany({
+        where: { userId: session.userId, id: { not: teller.id } },
+        data: { userId: null, categoryId: null },
+      }),
+      prisma.teller.update({
+        where: { id: teller.id },
+        data: { userId: session.userId, categoryId: categoryIdTrimmed },
+      }),
+    ]);
     const token = signSession({
       tellerId: teller.id,
       tillNumber: teller.tillNumber,

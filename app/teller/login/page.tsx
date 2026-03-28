@@ -109,15 +109,17 @@ export default function TellerLoginPage() {
 
   if (checkingAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30">
-        <p className="text-muted-foreground">Loading…</p>
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="glass-panel-strong rounded-2xl px-10 py-8">
+          <p className="text-muted-foreground">Loading…</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen">
-      <div className="relative hidden w-1/2 overflow-hidden bg-muted sm:block">
+      <div className="relative hidden w-1/2 overflow-hidden bg-blend-void sm:block">
         <Image
           src="/market.jpg"
           alt=""
@@ -127,11 +129,21 @@ export default function TellerLoginPage() {
           sizes="50vw"
         />
         <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gradient-to-t from-blend-void/80 via-blend-void/15 to-background/40" />
+        <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-card/45 px-8 py-5 text-foreground backdrop-blur-2xl">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Staff
+          </p>
+          <p className="text-lg font-semibold leading-snug">Teller access</p>
+        </div>
       </div>
 
-      <div className="flex w-full flex-col justify-center px-8 py-12 sm:w-1/2 sm:max-w-md sm:px-12 lg:px-16">
+      <div className="glass-panel flex w-full flex-col justify-center rounded-none px-8 py-12 sm:w-1/2 sm:max-w-md sm:rounded-l-3xl sm:border-l sm:px-12 lg:px-16">
         <div className="w-full">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Sign in
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
             Teller sign in
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -204,7 +216,7 @@ export default function TellerLoginPage() {
                   id="category"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="border-input h-11 w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-11 w-full rounded-lg border border-white/12 bg-card/35 px-3 py-2 text-sm text-foreground shadow-xs backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Category"
                 >
                   <option value="">All categories</option>
