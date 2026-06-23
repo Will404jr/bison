@@ -6,6 +6,8 @@ const prisma = new PrismaClient();
 const SEED_TELLER_EMAIL = "teller@example.com";
 const SEED_TELLER_USERNAME = "teller";
 const SEED_TELLER_PASSWORD = "teller123";
+const SEED_BRANCH_USERNAME = "branch1";
+const SEED_BRANCH_PASSWORD = "branch123";
 
 const DEFAULT_SERVICES = [
   { name: "Withdrawals", slug: "withdrawals", description: "Cash withdrawals" },
@@ -18,6 +20,19 @@ async function main() {
   await prisma.ticketTransaction.deleteMany();
   await prisma.ticket.deleteMany();
 
+  const branchPasswordHash = await hashPassword(SEED_BRANCH_PASSWORD);
+  const branch = await prisma.branch.upsert({
+    where: { username: SEED_BRANCH_USERNAME },
+    create: {
+      name: "Main Branch",
+      location: "Kampala",
+      username: SEED_BRANCH_USERNAME,
+      passwordHash: branchPasswordHash,
+      active: true,
+    },
+    update: { passwordHash: branchPasswordHash, active: true },
+  });
+
   const tellerPasswordHash = await hashPassword(SEED_TELLER_PASSWORD);
   await prisma.user.upsert({
     where: { email: SEED_TELLER_EMAIL },
@@ -26,8 +41,9 @@ async function main() {
       username: SEED_TELLER_USERNAME,
       passwordHash: tellerPasswordHash,
       active: true,
+      branchId: branch.id,
     },
-    update: { passwordHash: tellerPasswordHash, active: true },
+    update: { passwordHash: tellerPasswordHash, active: true, branchId: branch.id },
   });
 
   // Only add default services when the database has no services (fresh install)
@@ -50,7 +66,7 @@ async function main() {
   }
 
   console.log(
-    "Seed complete: 1 user (teller@example.com / teller123). Services and tellers only added when empty."
+    "Seed complete: 1 user (teller@example.com / teller123), 1 branch (branch1 / branch123). Services and tellers only added when empty."
   );
 }
 

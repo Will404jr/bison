@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -8,7 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Ticket, Users, ListOrdered, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Ticket, Users, ListOrdered, CheckCircle, type LucideIcon } from "lucide-react";
 
 type Stats = {
   waiting: number;
@@ -17,6 +19,33 @@ type Stats = {
   servicesCount: number;
   tellersCount: number;
 };
+
+function StatCard({
+  label,
+  value,
+  subtext,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  subtext: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between p-6">
+        <div className="space-y-1">
+          <p className="text-sm text-foreground/70">{label}</p>
+          <p className="text-3xl font-bold tabular-nums">{value}</p>
+          <p className="text-xs text-foreground/55">{subtext}</p>
+        </div>
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+          <Icon className="size-5 text-primary" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function DashboardHomePage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -32,7 +61,7 @@ export default function DashboardHomePage() {
 
   return (
     <div className="p-6">
-      <header className="glass-panel-strong -mx-6 -mt-6 mb-8 flex flex-col gap-4 rounded-b-2xl border-x-0 border-t-0 px-8 py-6 sm:flex-row sm:items-center sm:justify-between">
+      <header className="glass-panel-strong mb-8 flex flex-col gap-4 rounded-2xl px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Dashboard
@@ -40,11 +69,11 @@ export default function DashboardHomePage() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Hello, welcome back
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-foreground/70">
             Here’s an overview of your queue management system
           </p>
         </div>
-        <span className="glass-panel inline-flex w-fit items-center gap-1.5 rounded-full border-0 px-3 py-1 text-xs font-medium text-primary shadow-none">
+        <span className="glass-panel inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border-0 px-3 py-1 text-xs font-medium text-primary shadow-none">
           <span className="size-1.5 rounded-full bg-primary" />
           System active
         </span>
@@ -54,70 +83,38 @@ export default function DashboardHomePage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="animate-pulse">
-              <CardContent className="pt-6">
-                <div className="h-16 rounded bg-muted" />
+              <CardContent className="p-6">
+                <div className="h-16 rounded bg-muted/50" />
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm">Waiting</p>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {stats?.waiting ?? 0}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">tickets in queue</p>
-                </div>
-                <Ticket className="text-muted-foreground size-10" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-primary/25 shadow-lg shadow-black/20 ring-1 ring-primary/20">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm">Serving</p>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {stats?.serving ?? 0}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">being served now</p>
-                </div>
-                <ListOrdered className="text-muted-foreground size-10" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm">Completed today</p>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {stats?.completedToday ?? 0}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">tickets</p>
-                </div>
-                <CheckCircle className="text-muted-foreground size-10" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-muted-foreground text-sm">Queues / Tellers</p>
-                  <p className="text-3xl font-bold tabular-nums">
-                    {stats?.servicesCount ?? 0} / {stats?.tellersCount ?? 0}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">services · tills</p>
-                </div>
-                <Users className="text-muted-foreground size-10" />
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Waiting"
+            value={stats?.waiting ?? 0}
+            subtext="tickets in queue"
+            icon={Ticket}
+          />
+          <StatCard
+            label="Serving"
+            value={stats?.serving ?? 0}
+            subtext="being served now"
+            icon={ListOrdered}
+          />
+          <StatCard
+            label="Completed today"
+            value={stats?.completedToday ?? 0}
+            subtext="tickets"
+            icon={CheckCircle}
+          />
+          <StatCard
+            label="Queues / Tellers"
+            value={`${stats?.servicesCount ?? 0} / ${stats?.tellersCount ?? 0}`}
+            subtext="services · tills"
+            icon={Users}
+          />
         </div>
       )}
 
@@ -126,28 +123,19 @@ export default function DashboardHomePage() {
           <CardHeader>
             <CardTitle>Quick links</CardTitle>
             <CardDescription>
-              Kiosk, teller login, and display board
+              Customer Menu, teller login, and display board
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
-            <a
-              href="/kiosk"
-              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Customer kiosk
-            </a>
-            <a
-              href="/teller/login"
-              className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent"
-            >
-              Teller login
-            </a>
-            <a
-              href="/display"
-              className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium transition-colors hover:bg-accent"
-            >
-              Display board
-            </a>
+          <CardContent className="grid gap-3 sm:grid-cols-3">
+            <Button asChild className="h-11 w-full">
+              <Link href="/menu/login">Customer Menu</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 w-full">
+              <Link href="/teller/login">Teller login</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 w-full">
+              <Link href="/display/login">Display board</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

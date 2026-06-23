@@ -11,8 +11,7 @@ function slugify(name: string): string {
 
 export async function GET() {
   const services = await prisma.service.findMany({
-    include: { category: { select: { id: true, name: true, sortOrder: true } } },
-    orderBy: [{ category: { sortOrder: "asc" } }, { name: "asc" }],
+    orderBy: { name: "asc" },
   });
   return NextResponse.json(services);
 }
@@ -20,31 +19,15 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, description, categoryId } = body as {
+    const { name, description } = body as {
       name?: string;
       description?: string;
-      categoryId?: string;
     };
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json(
         { error: "name is required" },
         { status: 400 }
       );
-    }
-    if (categoryId != null && typeof categoryId !== "string") {
-      return NextResponse.json(
-        { error: "categoryId must be a string or null" },
-        { status: 400 }
-      );
-    }
-    if (categoryId) {
-      const cat = await prisma.category.findUnique({ where: { id: categoryId } });
-      if (!cat) {
-        return NextResponse.json(
-          { error: "Category not found" },
-          { status: 400 }
-        );
-      }
     }
     const baseSlug = slugify(name) || "service";
     let slug = baseSlug;
@@ -61,9 +44,7 @@ export async function POST(request: Request) {
           description && typeof description === "string"
             ? description.trim() || null
             : null,
-        categoryId: categoryId && categoryId.trim() ? categoryId.trim() : null,
       },
-      include: { category: { select: { id: true, name: true } } },
     });
     return NextResponse.json(service);
   } catch (e) {

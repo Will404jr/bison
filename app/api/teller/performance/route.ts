@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTellerSession } from "@/lib/auth";
+import { getTellerSession, resolveTellerBranchId } from "@/lib/auth";
 import { getStartOfToday, getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
 
@@ -20,6 +20,10 @@ export async function GET() {
   if (!session?.tellerId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const branchId = await resolveTellerBranchId(session);
+  if (!branchId) {
+    return NextResponse.json({ error: "User is not assigned to a branch" }, { status: 403 });
+  }
   const ticketDay = getTodayTicketDay();
   const dayStart = getStartOfToday();
   const dayEnd = endOfToday();
@@ -29,6 +33,7 @@ export async function GET() {
       prisma.ticket.findMany({
         where: {
           ticketDay,
+          branchId,
           servedByTellerId: session.tellerId,
           status: TicketStatus.completed,
         },
@@ -45,6 +50,7 @@ export async function GET() {
       prisma.ticket.findMany({
         where: {
           ticketDay,
+          branchId,
           servedByTellerId: session.tellerId,
           status: TicketStatus.no_show,
         },

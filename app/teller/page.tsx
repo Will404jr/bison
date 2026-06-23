@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +25,10 @@ const POLL_INTERVAL_MS = 4000;
 
 type QueueData = {
   tillNumber: number;
-  categoryId: string | null;
-  categories: { id: string; name: string }[];
+  branchId?: string;
+  branchName?: string | null;
+  serviceId: string | null;
+  serviceName: string | null;
   stats: {
     waiting: number;
     called: number;
@@ -45,6 +48,7 @@ type QueueData = {
     ticketNumber: string;
     status: string;
     serviceName: string;
+    phoneNumber: string | null;
     callCount: number;
     transactions: { id: string; label: string; completedAt: string | null }[];
   } | null;
@@ -94,8 +98,7 @@ export default function TellerDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [newTransactionLabel, setNewTransactionLabel] = useState("");
-  const [callNextServiceId, setCallNextServiceId] = useState<string>("");
-  const [changingCategory, setChangingCategory] = useState(false);
+  const [changingService, setChangingService] = useState(false);
   const [redirectOpen, setRedirectOpen] = useState(false);
   const [redirectTargets, setRedirectTargets] = useState<RedirectTarget[]>(
     []
@@ -129,13 +132,13 @@ export default function TellerDashboardPage() {
     return () => clearInterval(id);
   }, [refreshAll]);
 
-  async function callNext(serviceId?: string) {
+  async function callNext() {
     setActionLoading("next");
     try {
       const res = await fetch("/api/tickets/next", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serviceId ? { serviceId } : {}),
+        body: JSON.stringify({}),
       });
       if (res.status === 401) {
         router.push("/teller/login");
@@ -146,7 +149,6 @@ export default function TellerDashboardPage() {
         setError(json.error || "Failed to call next");
         return;
       }
-      setCallNextServiceId("");
       await refreshAll();
     } finally {
       setActionLoading(null);
@@ -206,18 +208,19 @@ export default function TellerDashboardPage() {
     }
   }
 
-  async function changeCategory(newCategoryId: string) {
-    setChangingCategory(true);
+  async function changeService(newServiceId: string) {
+    if (!newServiceId) return;
+    setChangingService(true);
     try {
       const res = await fetch("/api/auth/teller/setup", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categoryId: newCategoryId || null }),
+        body: JSON.stringify({ serviceId: newServiceId }),
       });
       if (!res.ok) return;
       await refreshAll();
     } finally {
-      setChangingCategory(false);
+      setChangingService(false);
     }
   }
 
@@ -278,37 +281,52 @@ export default function TellerDashboardPage() {
   return (
     <div className="flex h-dvh flex-col gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4">
       <header className="glass-panel-strong flex shrink-0 flex-col gap-2 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
+          <Image
+            src="/logo.png"
+            alt="Company logo"
+            width={200}
+            height={91}
+            className="h-11 w-auto shrink-0 object-contain"
+            priority
+          />
+          <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Teller
           </p>
           <h1 className="truncate text-lg font-semibold text-foreground sm:text-xl">
             Till {data.tillNumber}
+            {data.branchName ? (
+              <span className="font-normal text-foreground/70"> · {data.branchName}</span>
+            ) : null}
           </h1>
-          {data.categories.length > 0 && (
+          {data.services.length > 0 && (
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Label
-                htmlFor="change-category"
+                htmlFor="change-service"
                 className="text-xs text-muted-foreground sm:text-sm"
               >
                 Serving:
               </Label>
               <select
-                id="change-category"
-                value={data.categoryId ?? ""}
-                onChange={(e) => changeCategory(e.target.value)}
-                disabled={changingCategory}
+                id="change-service"
+                value={data.serviceId ?? ""}
+                onChange={(e) => changeService(e.target.value)}
+                disabled={changingService}
                 className="h-8 max-w-full rounded-lg border border-white/12 bg-card/40 px-2 text-xs text-foreground shadow-xs backdrop-blur-md sm:text-sm"
               >
-                <option value="">All categories</option>
-                {data.categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+                <option value="" disabled>
+                  Select a queue
+                </option>
+                {data.services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </select>
             </div>
           )}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {perf?.onBreak ? (
@@ -385,36 +403,15 @@ export default function TellerDashboardPage() {
               <CardHeader className="space-y-0 px-4 pb-2 pt-0">
                 <CardTitle className="text-base">Call next</CardTitle>
                 <CardDescription className="text-xs">
-                  {data.categoryId
-                    ? "Next in your category (optional service)"
-                    : "Next waiting (optional service)"}
+                  {data.serviceName
+                    ? `Next waiting in ${data.serviceName}`
+                    : "Next waiting"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-2 px-4 pb-0 pt-0 sm:flex-row sm:flex-wrap sm:items-end">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <Label
-                    htmlFor="call-next-service"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Service (optional)
-                  </Label>
-                  <select
-                    id="call-next-service"
-                    value={callNextServiceId}
-                    onChange={(e) => setCallNextServiceId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-white/12 bg-card/35 px-3 py-1 text-sm text-foreground shadow-xs backdrop-blur-md outline-none focus-visible:border-ring focus-visible:bg-card/45 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <option value="">Any</option>
-                    {data.services.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <CardContent className="px-4 pb-0 pt-0">
                 <Button
-                  className="w-full shrink-0 sm:w-auto"
-                  onClick={() => callNext(callNextServiceId || undefined)}
+                  className="w-full"
+                  onClick={() => callNext()}
                   disabled={
                     data.stats.waiting === 0 || actionLoading === "next"
                   }
@@ -434,12 +431,18 @@ export default function TellerDashboardPage() {
                     ? `${data.currentTicket.ticketNumber} · ${data.currentTicket.serviceName}`
                     : "None — use Call next"}
                 </CardDescription>
+                {data.currentTicket?.phoneNumber && (
+                  <p className="text-xs text-muted-foreground">
+                    Phone: {data.currentTicket.phoneNumber}
+                  </p>
+                )}
               </CardHeader>
               <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-2 pt-0">
               {data.currentTicket && (
                 <>
                   <div className="flex flex-wrap gap-2">
-                    {data.currentTicket.status === "serving" && (
+                    {(data.currentTicket.status === "serving" ||
+                      data.currentTicket.status === "called") && (
                       <>
                         <Button
                           variant="outline"

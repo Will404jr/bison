@@ -6,7 +6,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev -p 14000",
+    "dev": "next dev -p 14000 --webpack",
     "build": "next build",
     "start": "next start -p 14000",
     "lint": "eslint",

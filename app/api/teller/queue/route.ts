@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTellerSession } from "@/lib/auth";
+import { getTellerSession, resolveTellerBranchId } from "@/lib/auth";
 import { getTodayTicketDay } from "@/lib/ticket-day";
 import { TicketStatus } from "@prisma/client";
 
@@ -9,28 +9,31 @@ export async function GET() {
   if (!session?.tellerId || session.tillNumber == null) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  let categoryId = session.categoryId ?? null;
-  if (!categoryId) {
+  const branchId = await resolveTellerBranchId(session);
+  if (!branchId) {
+    return NextResponse.json({ error: "User is not assigned to a branch" }, { status: 403 });
+  }
+  let serviceId = session.serviceId ?? null;
+  if (!serviceId) {
     const teller = await prisma.teller.findUnique({
       where: { id: session.tellerId },
-      select: { categoryId: true },
+      select: { serviceId: true },
     });
-    categoryId = teller?.categoryId ?? null;
+    serviceId = teller?.serviceId ?? null;
   }
-  const serviceWhere = categoryId ? { categoryId } : {};
-  const categoryQueueLabels: string[] = categoryId
-    ? (await prisma.service.findMany({
-        where: { categoryId },
-        include: { category: { select: { name: true } } },
-      })).map((s) => (s.category?.name ?? "Other") + " - " + s.name)
-    : [];
+  const servedService = serviceId
+    ? await prisma.service.findUnique({
+        where: { id: serviceId },
+        select: { id: true, name: true },
+      })
+    : null;
+  const serviceName = servedService?.name ?? null;
   const ticketDay = getTodayTicketDay();
-  const categoryFilter =
-    categoryQueueLabels.length > 0
-      ? { queueLabel: { in: categoryQueueLabels } }
-      : {};
+  const serviceFilter = serviceName ? { queueLabel: serviceName } : {};
 
-  const [stats, currentTicket, allServices, waitingByQueueLabel, noShowToday] =
+  const branchFilter = { branchId };
+
+  const [stats, currentTicket, allServices, waitingByQueueLabel, noShowToday, branch] =
     await Promise.all([
     prisma.ticket.groupBy({
       by: ["status"],
@@ -38,22 +41,22 @@ export async function GET() {
       where: {
         ticketDay,
         status: { notIn: [TicketStatus.completed, TicketStatus.no_show] },
-        ...categoryFilter,
+        ...branchFilter,
+        ...serviceFilter,
       },
     }),
     prisma.ticket.findFirst({
       where: {
         ticketDay,
+        branchId,
         servedByTellerId: session.tellerId,
-        status: { in: [TicketStatus.serving, TicketStatus.held] },
+        status: { in: [TicketStatus.serving, TicketStatus.held, TicketStatus.called] },
       },
       include: { transactions: true },
       orderBy: { calledAt: "desc" },
     }),
     prisma.service.findMany({
-      where: serviceWhere,
       orderBy: { name: "asc" },
-      include: { category: { select: { name: true } } },
     }),
     prisma.ticket.groupBy({
       by: ["queueLabel"],
@@ -61,15 +64,21 @@ export async function GET() {
       where: {
         ticketDay,
         status: TicketStatus.waiting,
-        ...categoryFilter,
+        ...branchFilter,
+        ...serviceFilter,
       },
     }),
     prisma.ticket.count({
       where: {
         ticketDay,
         status: TicketStatus.no_show,
-        ...categoryFilter,
+        ...branchFilter,
+        ...serviceFilter,
       },
+    }),
+    prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { name: true },
     }),
   ]);
   const statsByStatus = Object.fromEntries(
@@ -82,23 +91,18 @@ export async function GET() {
   const waitingByServiceMap = Object.fromEntries(
     waitingByQueueLabel.map((s) => [s.queueLabel, s._count])
   );
-  const categories = await prisma.category.findMany({
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, name: true },
-  });
-  const waitingByService = allServices.map((s) => {
-    const label = (s.category?.name ?? "Other") + " - " + s.name;
-    return {
-      serviceId: s.id,
-      name: s.name,
-      slug: s.slug,
-      count: waitingByServiceMap[label] ?? 0,
-    };
-  });
+  const waitingByService = allServices.map((s) => ({
+    serviceId: s.id,
+    name: s.name,
+    slug: s.slug,
+    count: waitingByServiceMap[s.name] ?? 0,
+  }));
   return NextResponse.json({
     tillNumber: session.tillNumber,
-    categoryId,
-    categories,
+    serviceId,
+    serviceName,
+    branchId,
+    branchName: branch?.name ?? null,
     stats: {
       waiting: waitingCount,
       called: calledCount,
@@ -114,6 +118,7 @@ export async function GET() {
           ticketNumber: currentTicket.ticketNumber,
           status: currentTicket.status,
           serviceName: currentTicket.queueLabel,
+          phoneNumber: currentTicket.phoneNumber,
           callCount: currentTicket.callCount,
           transactions: currentTicket.transactions,
         }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   Home,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +21,16 @@ const STORAGE_KEY = "dashboard-sidebar-expanded";
 const items = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/dashboard/users", label: "Users", icon: Users },
+  { href: "/dashboard/branches", label: "Branches", icon: Building2 },
   { href: "/dashboard/queues", label: "Queues", icon: ListOrdered },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ] as const;
+
+const navItemClass = (expanded: boolean) =>
+  cn(
+    "flex items-center rounded-lg transition-colors",
+    expanded ? "gap-3 px-2 py-2.5" : "justify-center px-0 py-2.5"
+  );
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -48,24 +57,37 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen gap-0">
-      {/* Floating sidebar: not attached to screen edges */}
       <aside
         className={cn(
-          "fixed left-4 top-4 z-10 flex shrink-0 flex-col rounded-2xl border border-white/10 bg-sidebar/55 text-sidebar-foreground shadow-2xl shadow-black/40 backdrop-blur-2xl backdrop-saturate-150 transition-[width] duration-200 ease-in-out",
+          "glass-panel-strong fixed left-4 top-4 z-10 flex shrink-0 flex-col rounded-2xl text-sidebar-foreground shadow-2xl shadow-black/40 transition-[width] duration-200 ease-in-out",
           expanded ? "w-52" : "w-16"
         )}
         style={{ height: "calc(100vh - 2rem)" }}
         aria-label="Dashboard navigation"
       >
-        <div className="flex flex-col h-full py-4">
+        <div className="flex h-full flex-col py-4">
+          <div className="mb-4 flex items-center justify-center px-2">
+            <Image
+              src="/logo.png"
+              alt="Company logo"
+              width={200}
+              height={91}
+              className={cn(
+                "object-contain",
+                expanded ? "h-12 w-auto" : "h-auto w-full"
+              )}
+              priority
+            />
+          </div>
           <Link
             href="/"
-            className="mx-2 mb-6 flex items-center gap-3 rounded-lg px-2 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className={cn(
+              navItemClass(expanded),
+              "mx-2 mb-6 text-sidebar-foreground hover:bg-primary/10 hover:text-foreground"
+            )}
             aria-label="Back to site"
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary/20 text-sidebar-primary">
-              <Home className="size-4" />
-            </span>
+            <Home className="size-5 shrink-0 text-primary" />
             {expanded && <span className="truncate text-sm font-medium">Back to site</span>}
           </Link>
           <nav className="flex flex-1 flex-col gap-1 px-2">
@@ -76,10 +98,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   key={href}
                   href={href}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-2 py-2.5 text-sidebar-foreground transition-colors",
+                    navItemClass(expanded),
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      ? "bg-primary/15 text-foreground ring-1 ring-primary/25"
+                      : "text-sidebar-foreground hover:bg-primary/10 hover:text-foreground"
                   )}
                   aria-label={label}
                   aria-current={active ? "page" : undefined}
@@ -94,7 +116,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={toggle}
-              className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className={cn(
+                navItemClass(expanded),
+                "w-full text-sidebar-foreground hover:bg-primary/10 hover:text-foreground"
+              )}
               aria-expanded={expanded}
               aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
             >
@@ -105,15 +130,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               )}
               {expanded && <span className="text-sm font-medium">Collapse</span>}
             </button>
-            {expanded && (
-              <div className="px-2 pb-2 pt-1 text-center text-xs text-muted-foreground">
-                QMS
-              </div>
-            )}
           </div>
         </div>
       </aside>
-      {/* Main content: offset by sidebar width so it doesn't sit under the floating sidebar */}
       <div
         className={cn(
           "flex-1 transition-[margin-left] duration-200 ease-in-out",

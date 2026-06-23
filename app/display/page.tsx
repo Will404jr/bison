@@ -1,44 +1,57 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { VolumeX, Volume2 } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { LogOut, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const POLL_INTERVAL_MS = 4000;
-const DISPLAY_CONTENT_POLL_MS = 5 * 60 * 1000; // 5 minutes
-const AD_ROTATION_MS = 15000; // show one ad then shuffle to next
 const AUDIO_BASE = "/audio";
 const ANNOUNCE_REPEAT_COUNT = 2;
+const PLAYBACK_TIMEOUT_MS = 15000;
 
-type DisplayTicket = {
+type AudioContextConstructor = typeof AudioContext;
+
+function getAudioContextClass(): AudioContextConstructor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & { webkitAudioContext?: AudioContextConstructor };
+  return window.AudioContext ?? w.webkitAudioContext ?? null;
+}
+
+type KeepAliveHandle = {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+};
+
+type ServingTicket = {
   ticketNumber: string;
   tillNumber: number;
-  serviceName: string;
+  queueLabel: string;
   status: string;
   callCount?: number;
 };
 
-type ExternalAnnouncement = {
-  content?: string;
-  announcementType?: { name?: string; bgColor?: string; textColor?: string };
-};
-type ExternalAd =
-  | { id?: string; displayUrl?: string; ad?: string; adUrl?: string; name?: string; type?: string; mediaType?: string }
-  | string;
-type ForexRow = {
-  countryCode?: string;
-  moneyCode?: string;
-  buyingPrice?: string | number;
-  sellingPrice?: string | number;
+type WaitingTicket = {
+  ticketNumber: string;
+  queueLabel: string;
+  status: string;
 };
 
-type ExternalContent = {
-  apiUrl?: string;
-  announcements?: ExternalAnnouncement[];
-  ads?: ExternalAd[];
-  forex?: ForexRow[];
+type DisplayData = {
+  serving: ServingTicket[];
+  held: ServingTicket[];
+  waiting: WaitingTicket[];
 };
 
-/** All audio filenames we preload. */
 const PRELOAD_FILES = [
   "ticketnumber.mp3",
   "tocounter.mp3",
@@ -46,318 +59,430 @@ const PRELOAD_FILES = [
   ...["A", "B", "C", "D", "E", "F"].map((l) => `${l}.mp3`),
 ];
 
-function getAnnouncementUrls(ticketNumber: string, tillNumber: number): string[] {
-  const urls: string[] = [`${AUDIO_BASE}/ticketnumber.mp3`];
-  for (const char of ticketNumber.toUpperCase()) {
-    urls.push(`${AUDIO_BASE}/${char}.mp3`);
+function audioUrl(file: string): string {
+  return `${AUDIO_BASE}/${file}`;
+}
+
+async function loadAudioBuffer(
+  ctx: AudioContext,
+  cache: Map<string, AudioBuffer>,
+  url: string
+): Promise<AudioBuffer | null> {
+  const cached = cache.get(url);
+  if (cached) return cached;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.arrayBuffer();
+    const buffer = await ctx.decodeAudioData(data);
+    cache.set(url, buffer);
+    return buffer;
+  } catch {
+    return null;
   }
-  urls.push(`${AUDIO_BASE}/tocounter.mp3`);
+}
+
+function playAudioBuffer(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  destination: AudioNode
+): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timer = window.setTimeout(finish, PLAYBACK_TIMEOUT_MS);
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(destination);
+      source.onended = () => {
+        window.clearTimeout(timer);
+        finish();
+      };
+      source.start(0);
+    } catch {
+      window.clearTimeout(timer);
+      finish();
+    }
+  });
+}
+
+async function ensureAudioRunning(ctx: AudioContext): Promise<boolean> {
+  if (ctx.state === "closed") return false;
+  if (ctx.state !== "running") {
+    try {
+      await ctx.resume();
+    } catch {
+      return false;
+    }
+  }
+  const state: AudioContextState = ctx.state;
+  return state === "running" || state === "interrupted";
+}
+
+function startAudioKeepAlive(ctx: AudioContext, destination: AudioNode): KeepAliveHandle {
+  const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.001;
+  source.connect(gain);
+  gain.connect(destination);
+  source.start(0);
+  return { source, gain };
+}
+
+function stopAudioKeepAlive(handle: KeepAliveHandle | null) {
+  if (!handle) return;
+  try {
+    handle.source.stop();
+    handle.source.disconnect();
+    handle.gain.disconnect();
+  } catch {
+    // already stopped
+  }
+}
+
+async function playOneUrl(
+  ctx: AudioContext,
+  cache: Map<string, AudioBuffer>,
+  destination: AudioNode,
+  url: string
+): Promise<void> {
+  const buffer = await loadAudioBuffer(ctx, cache, url);
+  if (!buffer) return;
+  if (!(await ensureAudioRunning(ctx))) return;
+  await playAudioBuffer(ctx, buffer, destination);
+}
+
+async function playSequence(
+  ctx: AudioContext,
+  cache: Map<string, AudioBuffer>,
+  destination: AudioNode,
+  urls: string[]
+): Promise<void> {
+  for (const url of urls) {
+    await playOneUrl(ctx, cache, destination, url);
+  }
+}
+
+function getAnnouncementUrls(ticketNumber: string, tillNumber: number): string[] {
+  const urls: string[] = [audioUrl("ticketnumber.mp3")];
+  for (const char of ticketNumber.toUpperCase()) {
+    urls.push(audioUrl(`${char}.mp3`));
+  }
+  urls.push(audioUrl("tocounter.mp3"));
   for (const char of String(tillNumber)) {
-    urls.push(`${AUDIO_BASE}/${char}.mp3`);
+    urls.push(audioUrl(`${char}.mp3`));
   }
   return urls;
 }
 
-function playOneUrl(url: string, preloadedMap: Map<string, HTMLAudioElement>): Promise<void> {
-  return new Promise((resolve) => {
-    let audio = preloadedMap.get(url);
-    if (!audio) audio = new Audio(url);
-    const onDone = () => {
-      audio!.onended = null;
-      audio!.onerror = null;
-      resolve();
-    };
-    audio.onended = onDone;
-    audio.onerror = onDone;
-    audio.currentTime = 0;
-    audio.play().catch(onDone);
-  });
+function SectionHeader({
+  title,
+  count,
+  className,
+}: {
+  title: string;
+  count: number;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-4 ${className ?? ""}`}>
+      <h2 className="text-xl font-bold uppercase tracking-wider text-primary sm:text-2xl">
+        {title}
+      </h2>
+      <span className="glass-panel rounded-full px-3 py-1 text-sm font-semibold tabular-nums text-foreground shadow-none">
+        {count}
+      </span>
+    </div>
+  );
 }
 
-function playSequence(urls: string[], preloadedMap: Map<string, HTMLAudioElement>): Promise<void> {
-  return urls.reduce((p, url) => p.then(() => playOneUrl(url, preloadedMap)), Promise.resolve());
-}
-
-// ——— Flip clock: time with card-style digits ———
-function useTime() {
-  const [time, setTime] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return time;
-}
-
-function formatTime(d: Date): { h: string; m: string; s: string } {
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const s = d.getSeconds();
-  return {
-    h: String(h).padStart(2, "0"),
-    m: String(m).padStart(2, "0"),
-    s: String(s).padStart(2, "0"),
-  };
-}
-
-function FlipDigit({ value }: { value: string }) {
+function ServingCard({
+  ticket,
+  size = "large",
+}: {
+  ticket: ServingTicket;
+  size?: "large" | "medium";
+}) {
+  const isLarge = size === "large";
   return (
     <div
-      className="flex h-12 w-11 items-center justify-center rounded-lg border border-white/15 bg-card/45 shadow-inner backdrop-blur-md sm:h-14 sm:w-12"
-      aria-hidden
+      className={`glass-panel-strong flex flex-col items-center justify-center rounded-2xl px-6 py-5 text-center ${
+        isLarge ? "min-h-[10rem]" : "min-h-[8rem] ring-2 ring-amber-400/40"
+      }`}
     >
-      <span className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">{value}</span>
-    </div>
-  );
-}
-
-function FlipClock() {
-  const t = useTime();
-  const { h, m, s } = formatTime(t);
-  return (
-    <div className="flex items-center gap-1 sm:gap-2" role="timer" aria-label={`Time: ${h}:${m}:${s}`}>
-      <FlipDigit value={h} />
-      <span className="text-xl text-muted-foreground">:</span>
-      <FlipDigit value={m} />
-      <span className="text-xl text-muted-foreground">:</span>
-      <FlipDigit value={s} />
-    </div>
-  );
-}
-
-// ——— Marquee: single line, flows right to left (enters from right, exits left) ———
-function AnnouncementMarquee({ text }: { text: string }) {
-  const displayText = text.trim() || "No announcement";
-  return (
-    <div className="relative h-full w-full overflow-hidden">
-      <div
-        className="absolute top-1/2 w-max -translate-y-1/2 whitespace-nowrap pr-8 text-xl font-medium text-foreground will-change-[right] sm:text-2xl animate-display-marquee-right-to-left"
-        style={{ right: 0 }}
-      >
-        {displayText}
+      {!isLarge && (
+        <span className="mb-2 rounded-full bg-amber-400/20 px-3 py-0.5 text-xs font-bold uppercase tracking-wider text-amber-200">
+          On hold
+        </span>
+      )}
+      <div className="flex items-center gap-3 sm:gap-4">
+        <span
+          className={`font-bold tabular-nums tracking-tight text-foreground ${
+            isLarge ? "text-6xl sm:text-7xl lg:text-8xl" : "text-4xl sm:text-5xl"
+          }`}
+        >
+          {ticket.ticketNumber}
+        </span>
+        <span
+          className={`font-bold text-primary ${isLarge ? "text-4xl sm:text-5xl lg:text-6xl" : "text-3xl sm:text-4xl"}`}
+        >
+          →
+        </span>
+        <span
+          className={`font-bold tabular-nums tracking-tight text-foreground ${
+            isLarge ? "text-6xl sm:text-7xl lg:text-8xl" : "text-4xl sm:text-5xl"
+          }`}
+        >
+          {ticket.tillNumber}
+        </span>
       </div>
+      <p
+        className={`mt-3 max-w-full truncate text-foreground/70 ${
+          isLarge ? "text-lg sm:text-xl" : "text-base sm:text-lg"
+        }`}
+      >
+        {ticket.queueLabel}
+      </p>
     </div>
   );
 }
 
-// ——— Display page ———
+function WaitingCard({ ticket }: { ticket: WaitingTicket }) {
+  return (
+    <div className="glass-panel flex items-center gap-4 rounded-xl px-5 py-4">
+      <span className="text-4xl font-bold tabular-nums tracking-tight text-foreground sm:text-5xl">
+        {ticket.ticketNumber}
+      </span>
+      <p className="min-w-0 flex-1 truncate text-base text-foreground/70 sm:text-lg">
+        {ticket.queueLabel}
+      </p>
+    </div>
+  );
+}
+
 export default function DisplayPage() {
-  const [tickets, setTickets] = useState<DisplayTicket[]>([]);
-  const [external, setExternal] = useState<ExternalContent | null>(null);
+  const router = useRouter();
+  const [data, setData] = useState<DisplayData>({
+    serving: [],
+    held: [],
+    waiting: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
+  const [branchName, setBranchName] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
   const announcedRef = useRef<Set<string>>(new Set());
   const lastCallCountRef = useRef<Map<string, number>>(new Map());
   const announcementQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const preloadedAudioRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const keepAliveRef = useRef<KeepAliveHandle | null>(null);
+  const bufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const fetchDisplayRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const audioUnlockedRef = useRef(false);
+  const pendingAnnounceRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    const map = preloadedAudioRef.current;
-    let loaded = 0;
-    const total = PRELOAD_FILES.length;
-    const checkReady = () => {
-      loaded++;
-      if (loaded >= total) map.set("ready", null!);
-    };
-    PRELOAD_FILES.forEach((file) => {
-      const url = `${AUDIO_BASE}/${file}`;
-      const audio = new Audio();
-      audio.preload = "auto";
-      audio.oncanplaythrough = checkReady;
-      audio.onerror = checkReady;
-      audio.src = url;
-      audio.load();
-      map.set(url, audio);
-    });
+  const resetAudio = useCallback(() => {
+    stopAudioKeepAlive(keepAliveRef.current);
+    keepAliveRef.current = null;
+    masterGainRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    bufferCacheRef.current.clear();
+    audioUnlockedRef.current = false;
+    setAudioUnlocked(false);
   }, []);
 
+  const unlockAudio = useCallback(async () => {
+    try {
+      setError(null);
+      const AudioCtx = getAudioContextClass();
+      if (!AudioCtx) {
+        setError("This browser does not support audio playback.");
+        return;
+      }
+
+      stopAudioKeepAlive(keepAliveRef.current);
+      keepAliveRef.current = null;
+      if (audioContextRef.current?.state !== "closed") {
+        void audioContextRef.current?.close();
+      }
+
+      const ctx = new AudioCtx();
+      const masterGain = ctx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(ctx.destination);
+      audioContextRef.current = ctx;
+      masterGainRef.current = masterGain;
+
+      if (!(await ensureAudioRunning(ctx))) {
+        resetAudio();
+        setError("Could not enable sound. Check browser permissions and try again.");
+        return;
+      }
+
+      keepAliveRef.current = startAudioKeepAlive(ctx, masterGain);
+
+      await Promise.all(
+        PRELOAD_FILES.map((file) =>
+          loadAudioBuffer(ctx, bufferCacheRef.current, audioUrl(file))
+        )
+      );
+      const testBuffer = bufferCacheRef.current.get(audioUrl("ticketnumber.mp3"));
+      if (testBuffer) {
+        await playAudioBuffer(ctx, testBuffer, masterGain);
+      }
+
+      audioUnlockedRef.current = true;
+      setAudioUnlocked(true);
+      announcedRef.current.clear();
+      lastCallCountRef.current.clear();
+      pendingAnnounceRef.current.clear();
+      void fetchDisplayRef.current();
+    } catch {
+      resetAudio();
+      setError("Could not enable sound. Check browser permissions and try again.");
+    }
+  }, [resetAudio]);
+
+  useEffect(() => {
+    return () => {
+      stopAudioKeepAlive(keepAliveRef.current);
+      keepAliveRef.current = null;
+      void audioContextRef.current?.close();
+      audioContextRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/branch/me")
+      .then((res) => {
+        if (!res.ok) {
+          router.replace("/display/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then((session) => {
+        if (session?.name) setBranchName(session.name);
+      })
+      .catch(() => router.replace("/display/login"))
+      .finally(() => setAuthChecked(true));
+  }, [router]);
+
   const fetchDisplay = useCallback(async () => {
+    if (!authChecked) return;
     try {
       const res = await fetch("/api/display");
+      if (res.status === 401) {
+        router.replace("/display/login");
+        return;
+      }
       if (!res.ok) {
         setError("Failed to load display");
         return;
       }
-      const data = await res.json();
-      setTickets(data.tickets ?? []);
+      const json = (await res.json()) as DisplayData;
+      setData({
+        serving: json.serving ?? [],
+        held: json.held ?? [],
+        waiting: json.waiting ?? [],
+      });
       setError(null);
 
       const announced = announcedRef.current;
       const lastCallCount = lastCallCountRef.current;
-      const preloadedMap = preloadedAudioRef.current;
-      const toAnnounce: DisplayTicket[] = [];
+      const bufferCache = bufferCacheRef.current;
+      const toAnnounce: ServingTicket[] = [];
 
-      for (const t of data.tickets ?? []) {
+      for (const t of json.serving ?? []) {
         const key = `${t.ticketNumber}|${t.tillNumber}`;
         const callCount = t.callCount ?? 0;
         const prevCallCount = lastCallCount.get(key) ?? 0;
+        if (pendingAnnounceRef.current.has(key)) continue;
         if (!announced.has(key)) {
-          announced.add(key);
-          lastCallCount.set(key, callCount);
           toAnnounce.push(t);
         } else if (callCount > prevCallCount) {
-          lastCallCount.set(key, callCount);
           toAnnounce.push(t);
         }
       }
 
-      if (toAnnounce.length > 0) {
-        announcementQueueRef.current = announcementQueueRef.current.then(async () => {
-          for (const t of toAnnounce) {
-            const urls = getAnnouncementUrls(t.ticketNumber, t.tillNumber);
-            for (let r = 0; r < ANNOUNCE_REPEAT_COUNT; r++) {
-              await playSequence(urls, preloadedMap);
+      if (toAnnounce.length > 0 && audioUnlockedRef.current) {
+        const batch = [...toAnnounce];
+        const ctx = audioContextRef.current;
+        const destination = masterGainRef.current;
+        for (const t of batch) {
+          pendingAnnounceRef.current.add(`${t.ticketNumber}|${t.tillNumber}`);
+        }
+        announcementQueueRef.current = announcementQueueRef.current
+          .then(async () => {
+            if (!ctx || !destination || ctx.state === "closed") {
+              for (const t of batch) {
+                pendingAnnounceRef.current.delete(`${t.ticketNumber}|${t.tillNumber}`);
+              }
+              return;
             }
-          }
-        });
+            if (!(await ensureAudioRunning(ctx))) {
+              for (const t of batch) {
+                pendingAnnounceRef.current.delete(`${t.ticketNumber}|${t.tillNumber}`);
+              }
+              resetAudio();
+              setError("Sound was paused by the browser. Tap Enable sound again.");
+              return;
+            }
+            for (const t of batch) {
+              const key = `${t.ticketNumber}|${t.tillNumber}`;
+              try {
+                const urls = getAnnouncementUrls(t.ticketNumber, t.tillNumber);
+                for (let r = 0; r < ANNOUNCE_REPEAT_COUNT; r++) {
+                  await playSequence(ctx, bufferCache, destination, urls);
+                }
+                announced.add(key);
+                lastCallCount.set(key, t.callCount ?? 0);
+              } finally {
+                pendingAnnounceRef.current.delete(key);
+              }
+            }
+          })
+          .catch(() => {
+            for (const t of batch) {
+              pendingAnnounceRef.current.delete(`${t.ticketNumber}|${t.tillNumber}`);
+            }
+          });
       }
     } catch {
       setError("Failed to load display");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authChecked, router, audioUnlocked, resetAudio]);
 
-  const fetchExternal = useCallback(async () => {
-    try {
-      const res = await fetch("/api/external/content");
-      if (res.ok) {
-        const data = (await res.json()) as ExternalContent;
-        setExternal({
-          apiUrl: typeof data.apiUrl === "string" ? data.apiUrl : undefined,
-          announcements: Array.isArray(data.announcements) ? data.announcements : [],
-          ads: Array.isArray(data.ads) ? data.ads : [],
-          forex: Array.isArray(data.forex) ? data.forex : [],
-        });
-      }
-    } catch {
-      setExternal(null);
-    }
-  }, []);
+  fetchDisplayRef.current = fetchDisplay;
 
   useEffect(() => {
+    if (!authChecked) return;
     fetchDisplay();
     const id = setInterval(fetchDisplay, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [fetchDisplay]);
+  }, [fetchDisplay, authChecked]);
 
-  useEffect(() => {
-    fetchExternal();
-    const id = setInterval(fetchExternal, DISPLAY_CONTENT_POLL_MS);
-    return () => clearInterval(id);
-  }, [fetchExternal]);
-
-  const announcements = external?.announcements ?? [];
-  const [announcementIndex, setAnnouncementIndex] = useState(0);
-  useEffect(() => {
-    if (announcements.length <= 1) return;
-    const id = setInterval(
-      () => setAnnouncementIndex((i) => (i + 1) % announcements.length),
-      20000
-    );
-    return () => clearInterval(id);
-  }, [announcements.length]);
-  const currentAnnouncement =
-    announcements[announcements.length > 0 ? announcementIndex % announcements.length : 0];
-  const announcementTypeName = currentAnnouncement?.announcementType?.name ?? "Now Serving";
-  const announcementTypeStyle = currentAnnouncement?.announcementType
-    ? {
-        backgroundColor: currentAnnouncement.announcementType.bgColor ?? undefined,
-        color: currentAnnouncement.announcementType.textColor ?? undefined,
-      }
-    : undefined;
-  const announcementText =
-    currentAnnouncement?.content ??
-    (tickets.length > 0
-      ? `Ticket ${tickets.map((t) => `${t.ticketNumber} → Till ${t.tillNumber}`).join("  •  ")}`
-      : "Welcome. Please wait for your number to be called.");
-
-  const apiUrl = external?.apiUrl ?? "";
-  const ads = external?.ads ?? [];
-  const [currentAdIndex, setCurrentAdIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
-  const adIframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    setCurrentAdIndex(0);
-  }, [ads.length]);
-  useEffect(() => {
-    setIsMuted(true);
-  }, [currentAdIndex]);
-
-  useEffect(() => {
-    if (ads.length <= 1) return;
-    const id = setInterval(
-      () => setCurrentAdIndex((i) => (i + 1) % ads.length),
-      AD_ROTATION_MS
-    );
-    return () => clearInterval(id);
-  }, [ads.length]);
-
-  useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      const origin = apiUrl ? new URL(apiUrl).origin : "";
-      if (origin && e.origin !== origin) return;
-      const data = e.data;
-      if (data && typeof data === "object" && (data.type === "adEnded" || data.type === "videoEnded")) {
-        setCurrentAdIndex((i) => (i + 1) % ads.length);
-      }
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [apiUrl, ads.length]);
-
-  const sendMuteToIframe = useCallback((muted: boolean) => {
-    const iframe = adIframeRef.current;
-    if (!iframe?.contentWindow) return;
-    try {
-      const targetOrigin =
-        typeof window !== "undefined" ? window.location.origin : "*";
-      iframe.contentWindow.postMessage({ type: "setMuted", muted }, targetOrigin);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  /** Tell iframe to start muted so video can autoplay without sound. Retry so CMS video has time to mount. */
-  const handleAdIframeLoad = useCallback(() => {
-    sendMuteToIframe(true);
-    setTimeout(() => sendMuteToIframe(true), 300);
-    setTimeout(() => sendMuteToIframe(true), 800);
-  }, [sendMuteToIframe]);
-
-  const toggleMute = useCallback(() => {
-    setIsMuted((m) => {
-      const next = !m;
-      sendMuteToIframe(next);
-      return next;
-    });
-  }, [sendMuteToIframe]);
-
-  /** Display URL for an ad. Prefer redirect route by id (per updated-display-video-ads.md); fallback to proxy with displayUrl. */
-  function getAdIframeSrc(item: ExternalAd): string | null {
-    if (typeof item === "object" && item.id) {
-      return `/api/external/ad-display?id=${encodeURIComponent(item.id)}`;
-    }
-    if (typeof item === "string") {
-      const path = item.startsWith("/") ? item : `/${item}`;
-      const full = apiUrl ? `${apiUrl.replace(/\/$/, "")}${path}` : item;
-      return full.startsWith("http") ? `/api/external/ad-image?url=${encodeURIComponent(full)}` : full;
-    }
-    const raw = item.displayUrl ?? item.adUrl ?? item.ad ?? "";
-    if (!raw) return null;
-    const full =
-      raw.startsWith("http://") || raw.startsWith("https://")
-        ? raw
-        : apiUrl
-          ? `${apiUrl.replace(/\/$/, "")}${raw.startsWith("/") ? raw : `/${raw}`}`
-          : raw;
-    return full.startsWith("http") ? `/api/external/ad-image?url=${encodeURIComponent(full)}` : full;
+  async function handleLogout() {
+    await fetch("/api/auth/branch/logout", { method: "POST" });
+    router.replace("/display/login");
   }
 
-  const currentAd = ads.length > 0 ? ads[currentAdIndex % ads.length] : null;
-  const forex = external?.forex ?? [];
-
-  if (loading && tickets.length === 0 && !external) {
+  if (!authChecked || (loading && data.serving.length === 0 && data.held.length === 0 && data.waiting.length === 0)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="glass-panel-strong rounded-2xl px-12 py-10">
@@ -368,163 +493,141 @@ export default function DisplayPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-card/30 to-background text-foreground">
-      {/* Top bar: announcement type (full height) | marquee | time */}
-      <header className="flex shrink-0 items-stretch gap-0 border-b border-white/10 bg-card/35 backdrop-blur-xl backdrop-saturate-150">
-        <div
-          className={`flex w-36 shrink-0 items-center justify-center rounded-none px-4 sm:w-44 ${announcementTypeStyle ? "" : "surface-ribbon"}`}
-          style={announcementTypeStyle}
-        >
-          <span className="text-center text-base font-bold uppercase tracking-wide sm:text-lg">
-            {announcementTypeName}
-          </span>
-        </div>
-        <div className="glass-panel m-1.5 min-h-[3.5rem] min-w-0 flex-1 rounded-xl py-2">
-          <AnnouncementMarquee text={announcementText} />
-        </div>
-        <div className="flex shrink-0 items-center p-2 sm:p-3">
-          <div className="glass-panel-strong rounded-xl px-2 py-1.5 sm:px-3 sm:py-2">
-            <FlipClock />
+    <div className="relative flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-card/30 to-background text-foreground">
+      {!audioUnlocked && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm">
+          <div className="glass-panel-strong max-w-md rounded-2xl p-8 text-center shadow-2xl">
+            <h2 className="text-xl font-semibold text-foreground sm:text-2xl">
+              Enable announcements
+            </h2>
+            <p className="mt-2 text-sm text-foreground/70 sm:text-base">
+              Tap once to unlock sound. You should hear a short test clip immediately.
+            </p>
+            <Button
+              type="button"
+              className="mt-6 h-12 w-full text-base sm:text-lg"
+              onClick={() => void unlockAudio()}
+            >
+              Enable sound
+            </Button>
           </div>
         </div>
+      )}
+      <header className="glass-panel-strong flex h-16 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          {logoError ? (
+            <div className="glass-panel flex size-12 shrink-0 items-center justify-center rounded-lg shadow-none">
+              <span className="text-sm font-bold text-primary">QMS</span>
+            </div>
+          ) : (
+            <Image
+              src="/logo.png"
+              alt="Company logo"
+              width={200}
+              height={91}
+              className="h-11 w-auto shrink-0 object-contain"
+              onError={() => setLogoError(true)}
+              priority
+            />
+          )}
+        </div>
+
+        <p className="truncate text-center text-base font-semibold text-foreground/90 sm:text-lg">
+          {branchName ?? "Branch"}
+        </p>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10 shrink-0 rounded-full"
+              aria-label="User menu"
+            >
+              <User className="size-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            {branchName && (
+              <>
+                <DropdownMenuLabel>{branchName}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="size-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
-      {/* Content: left = ads + tickets, right = forex full height to bottom of screen */}
-      <div className="flex min-h-0 flex-1">
-        {/* Left column: ads (fits in space) + tickets bar at bottom */}
-        <div className="flex min-w-0 flex-1 flex-col min-h-0">
-          {/* Ads - one at a time, rotate on end (postMessage adEnded/videoEnded) or timer. Mute control for iframe. */}
-          <section className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden border-b border-white/10 bg-card/15 p-4 backdrop-blur-sm">
-            {currentAd ? (
-              (() => {
-                const item = typeof currentAd === "string" ? { displayUrl: currentAd } : currentAd;
-                const src = getAdIframeSrc(item);
-                if (!src) return null;
-                const label = typeof item === "object" && item.name ? String(item.name) : "Ad";
-                return (
-                  <div
-                    key={currentAdIndex}
-                    className="glass-panel relative flex h-full max-h-full w-full max-w-full items-center justify-center overflow-hidden rounded-xl p-2"
-                  >
-                    <iframe
-                      ref={adIframeRef}
-                      key={
-                        typeof item === "object" && item.id
-                          ? `ad-${item.id}`
-                          : `ad-${currentAdIndex}`
-                      }
-                      src={src}
-                      title={label}
-                      className="h-full w-full min-h-0 min-w-0 rounded-lg border-0 object-contain"
-                      allow="autoplay; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      onLoad={handleAdIframeLoad}
-                    />
-                    <button
-                      type="button"
-                      onClick={toggleMute}
-                      className="glass-panel-strong absolute bottom-3 right-3 flex size-10 items-center justify-center rounded-full text-foreground transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      aria-label={isMuted ? "Unmute ad" : "Mute ad"}
-                      title={isMuted ? "Unmute" : "Mute"}
-                    >
-                      {isMuted ? (
-                        <VolumeX className="h-5 w-5" aria-hidden />
-                      ) : (
-                        <Volume2 className="h-5 w-5" aria-hidden />
-                      )}
-                    </button>
-                  </div>
-                );
-              })()
+      <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+        {error && (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        )}
+
+        <section
+          className="glass-panel flex min-h-0 flex-[1.2] flex-col gap-4 rounded-2xl p-4 sm:p-5"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <SectionHeader title="Now serving" count={data.serving.length} />
+          {data.serving.length === 0 ? (
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-lg text-foreground/55">No customers being served</p>
+            </div>
+          ) : (
+            <div className="grid min-h-0 flex-1 auto-rows-fr gap-4 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+              {data.serving.map((t) => (
+                <ServingCard
+                  key={`${t.ticketNumber}-${t.tillNumber}`}
+                  ticket={t}
+                  size="large"
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
+          <section className="glass-panel flex min-h-0 flex-col gap-4 rounded-2xl p-4 sm:p-5">
+            <SectionHeader title="On hold" count={data.held.length} />
+            {data.held.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-foreground/55">No tickets on hold</p>
+              </div>
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                <span className="text-sm">Ad space</span>
+              <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto sm:grid-cols-2">
+                {data.held.map((t) => (
+                  <ServingCard
+                    key={`held-${t.ticketNumber}-${t.tillNumber}`}
+                    ticket={t}
+                    size="medium"
+                  />
+                ))}
               </div>
             )}
           </section>
 
-          {/* Tickets bar - fixed height at bottom of left column */}
-          <footer
-            className="glass-panel-strong mx-2 mb-2 flex min-h-[5.5rem] shrink-0 items-center gap-4 rounded-t-2xl px-4 py-4"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            )}
-            {tickets.length === 0 ? (
-              <p className="text-muted-foreground">No tickets currently being served</p>
+          <section className="glass-panel flex min-h-0 flex-col gap-4 rounded-2xl p-4 sm:p-5">
+            <SectionHeader title="Waiting" count={data.waiting.length} />
+            {data.waiting.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-foreground/55">Queue is empty</p>
+              </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-center gap-6">
-                {tickets.map((t) => (
-                  <div
-                    key={`${t.ticketNumber}-${t.tillNumber}`}
-                    className="glass-panel-strong flex shrink-0 items-center gap-2 rounded-2xl px-6 py-3"
-                  >
-                    <span className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
-                      {t.ticketNumber}
-                    </span>
-                    <span className="text-3xl text-primary sm:text-4xl">→</span>
-                    <span className="text-5xl font-bold tracking-tight text-foreground sm:text-6xl">
-                      {t.tillNumber}
-                    </span>
-                  </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+                {data.waiting.map((t) => (
+                  <WaitingCard key={`wait-${t.ticketNumber}`} ticket={t} />
                 ))}
               </div>
             )}
-          </footer>
+          </section>
         </div>
-
-        {/* Forex - full height from below header to bottom of screen */}
-        <aside className="flex h-full min-w-[26rem] shrink-0 flex-col border-l border-white/15 bg-card/40 text-card-foreground backdrop-blur-2xl backdrop-saturate-150 sm:min-w-[30rem]">
-          <div className="border-b border-white/10 bg-card/30 px-4 py-3 backdrop-blur-md">
-            <h2 className="text-base font-semibold uppercase tracking-wide text-primary sm:text-lg">
-              Forex
-            </h2>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto">
-            {forex.length > 0 ? (
-              <table className="w-full text-left text-xl sm:text-2xl">
-                <thead className="sticky top-0 z-[1] bg-muted text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-medium"></th>
-                    <th className="px-4 py-3 font-medium"></th>
-                    <th className="px-4 py-3 font-medium">Buy</th>
-                    <th className="px-4 py-3 font-medium">Sell</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {forex.map((row, i) => (
-                    <tr
-                      key={i}
-                      className={`border-b border-border ${i % 2 === 0 ? "bg-background" : "bg-muted/40"}`}
-                    >
-                      <td className="px-4 py-2.5 font-extrabold text-foreground">
-                        {row.countryCode ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-extrabold text-foreground/90">
-                        {row.moneyCode ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-extrabold tabular-nums text-foreground/90">
-                        {row.buyingPrice != null ? String(row.buyingPrice) : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-extrabold tabular-nums text-foreground/90">
-                        {row.sellingPrice != null ? String(row.sellingPrice) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="flex h-full items-center justify-center p-4 text-center text-base text-muted-foreground">
-                No forex data
-              </div>
-            )}
-          </div>
-        </aside>
-      </div>
+      </main>
     </div>
   );
 }

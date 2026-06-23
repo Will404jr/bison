@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model User {
@@ -16,16 +17,22 @@ model User {
   username     String   @unique
   passwordHash String
   active       Boolean  @default(true)
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   createdAt    DateTime @default(now())
 }
 
-model Category {
-  id        String   @id @default(cuid())
-  name      String
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  services  Service[]
-  tellers   Teller[]
+model Branch {
+  id           String   @id @default(cuid())
+  name         String
+  location     String
+  username     String   @unique
+  passwordHash String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tickets      Ticket[]
+  users        User[]
 }
 
 model Service {
@@ -33,9 +40,8 @@ model Service {
   name        String
   slug        String    @unique
   description String?
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
+  tellers     Teller[]
 }
 
 model Teller {
@@ -44,8 +50,8 @@ model Teller {
   pinHash    String?
   name       String?
   userId     String?   @unique
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  serviceId  String?
+  service    Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   createdAt  DateTime  @default(now())
   tickets    Ticket[]
   breaks     TellerBreak[]
@@ -63,9 +69,11 @@ enum TicketStatus {
 model Ticket {
   id               String         @id @default(cuid())
   ticketDay        String         // YYYY-MM-DD so numbers reset per day
-  ticketNumber     String         // A01..A99, B01..B99, etc. unique per day
-  queueLabel       String         // "Category Name - Service Name"
-  @@unique([ticketDay, ticketNumber])
+  ticketNumber     String         // A01..A99, B01..B99, etc. unique per day per branch
+  queueLabel       String         // service name
+  phoneNumber      String?
+  branchId         String?
+  branch           Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
   status           TicketStatus   @default(waiting)
   callCount        Int            @default(0)
   calledAt         DateTime?
@@ -74,6 +82,8 @@ model Ticket {
   servedByTeller   Teller?        @relation(fields: [servedByTellerId], references: [id])
   createdAt        DateTime       @default(now())
   transactions     TicketTransaction[]
+
+  @@unique([ticketDay, ticketNumber, branchId])
 }
 
 model TicketTransaction {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Category = { id: string; name: string };
+type Service = { id: string; name: string };
 
 export default function TellerLoginPage() {
   const router = useRouter();
@@ -15,8 +15,8 @@ export default function TellerLoginPage() {
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [tillNumber, setTillNumber] = useState<string>("1");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [serviceId, setServiceId] = useState<string>("");
+  const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -42,10 +42,10 @@ export default function TellerLoginPage() {
 
   useEffect(() => {
     if (step === 2) {
-      fetch("/api/categories")
+      fetch("/api/services")
         .then((r) => (r.ok ? r.json() : []))
-        .then((cats: { id: string; name: string }[]) => setCategories(cats))
-        .catch(() => setCategories([]));
+        .then((svcs: { id: string; name: string }[]) => setServices(svcs))
+        .catch(() => setServices([]));
     }
   }, [step]);
 
@@ -67,10 +67,10 @@ export default function TellerLoginPage() {
       setStep(2);
       setPassword("");
       if (step === 2) {
-        const r2 = await fetch("/api/categories");
+        const r2 = await fetch("/api/services");
         if (r2.ok) {
-          const cats = await r2.json();
-          setCategories(cats);
+          const svcs = await r2.json();
+          setServices(svcs);
         }
       }
     } catch {
@@ -90,7 +90,7 @@ export default function TellerLoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tillNumber: parseInt(tillNumber, 10),
-          categoryId: categoryId.trim() || undefined,
+          serviceId: serviceId.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -140,6 +140,14 @@ export default function TellerLoginPage() {
 
       <div className="glass-panel flex w-full flex-col justify-center rounded-none px-8 py-12 sm:w-1/2 sm:max-w-md sm:rounded-l-3xl sm:border-l sm:px-12 lg:px-16">
         <div className="w-full">
+          <Image
+            src="/logo.png"
+            alt="Company logo"
+            width={200}
+            height={91}
+            className="mb-6 h-16 w-auto object-contain"
+            priority
+          />
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Sign in
           </p>
@@ -149,7 +157,7 @@ export default function TellerLoginPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             {step === 1
               ? "Enter your email or username and password"
-              : "Choose your till and the category you will serve"}
+              : "Choose your till and the queue you will serve"}
           </p>
 
           {step === 1 ? (
@@ -211,23 +219,26 @@ export default function TellerLoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category">Category you will serve</Label>
+                <Label htmlFor="service">Queue you will serve</Label>
                 <select
-                  id="category"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
+                  id="service"
+                  value={serviceId}
+                  onChange={(e) => setServiceId(e.target.value)}
+                  required
                   className="h-11 w-full rounded-lg border border-white/12 bg-card/35 px-3 py-2 text-sm text-foreground shadow-xs backdrop-blur-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Category"
+                  aria-label="Queue"
                 >
-                  <option value="">All categories</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+                  <option value="" disabled>
+                    Select a queue
+                  </option>
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
                     </option>
                   ))}
                 </select>
                 <p className="text-muted-foreground text-xs">
-                  You will only receive tickets from this category until you change it.
+                  You will only receive tickets from this queue until you change it.
                 </p>
               </div>
               <Button type="submit" className="h-11 w-full" disabled={loading}>

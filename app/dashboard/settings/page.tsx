@@ -80,15 +80,15 @@ export default function DashboardSettingsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <header className="glass-panel-strong -mx-6 -mt-6 rounded-b-2xl border-x-0 border-t-0 px-8 py-6">
+    <div className="p-6">
+      <header className="glass-panel-strong mb-8 rounded-2xl px-6 py-5">
         <p className="text-xs font-semibold uppercase tracking-wider text-primary">
           Dashboard
         </p>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Settings
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-foreground/70">
           Edit API URL, API key, admin username and admin password.
         </p>
       </header>
@@ -102,7 +102,7 @@ export default function DashboardSettingsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-muted-foreground text-sm">Loading…</p>
+            <p className="text-sm text-foreground/55">Loading…</p>
           ) : (
             <form onSubmit={handleSubmit} className="flex max-w-md flex-col gap-4">
               {error && (
@@ -111,7 +111,7 @@ export default function DashboardSettingsPage() {
                 </p>
               )}
               {success && (
-                <p className="text-muted-foreground text-sm" role="status">
+                <p className="text-sm text-primary" role="status">
                   {success}
                 </p>
               )}
@@ -158,11 +158,11 @@ export default function DashboardSettingsPage() {
                   onChange={(e) => setAdminPassword(e.target.value)}
                   placeholder="Leave blank to keep current password"
                 />
-                <p className="text-muted-foreground text-xs">
+                <p className="text-xs text-foreground/55">
                   Min 6 characters. Only change if you want to set a new password.
                 </p>
               </div>
-              <Button type="submit" disabled={saving} className="w-fit">
+              <Button type="submit" disabled={saving} className="h-11 w-full sm:w-fit">
                 {saving ? "Saving…" : "Save settings"}
               </Button>
             </form>

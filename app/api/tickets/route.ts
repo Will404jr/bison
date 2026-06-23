@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getTodayTicketDay } from "@/lib/ticket-day";
+import { getBranchSession } from "@/lib/auth";
 import { TicketStatus } from "@prisma/client";
 
 /** Parse ticket number like A01, B99, Z99, AA01 into { letters, num }. Format: letters + exactly 2 digits (01–99). */
@@ -62,25 +63,47 @@ function getMaxDailyTicketNumber(
 const MAX_CREATE_RETRIES = 8;
 const RETRY_DELAY_MS = 80;
 
+function normalizePhoneNumber(input: string): string | null {
+  const digits = input.replace(/[\s-]/g, "").replace(/\D/g, "");
+  if (digits.length < 8 || digits.length > 15) return null;
+  return digits;
+}
+
 export async function POST(request: Request) {
   try {
+    const session = await getBranchSession();
+    if (!session?.branchId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const branchId = session.branchId;
+
     const body = await request.json();
-    const { serviceId, queueLabel: bodyQueueLabel } = body as {
+    const { serviceId, queueLabel: bodyQueueLabel, phoneNumber: bodyPhoneNumber } = body as {
       serviceId?: string;
       queueLabel?: string;
+      phoneNumber?: string;
     };
+    if (bodyPhoneNumber == null || typeof bodyPhoneNumber !== "string") {
+      return NextResponse.json({ error: "phoneNumber is required" }, { status: 400 });
+    }
+    const phoneNumber = normalizePhoneNumber(bodyPhoneNumber.trim());
+    if (!phoneNumber) {
+      return NextResponse.json(
+        { error: "Enter a valid phone number (8–15 digits)" },
+        { status: 400 }
+      );
+    }
     let queueLabel: string;
     if (bodyQueueLabel != null && typeof bodyQueueLabel === "string" && bodyQueueLabel.trim()) {
       queueLabel = bodyQueueLabel.trim();
     } else if (serviceId && typeof serviceId === "string") {
       const service = await prisma.service.findUnique({
         where: { id: serviceId },
-        include: { category: { select: { name: true } } },
       });
       if (!service) {
         return NextResponse.json({ error: "Service not found" }, { status: 404 });
       }
-      queueLabel = (service.category?.name ?? "Other") + " - " + service.name;
+      queueLabel = service.name;
     } else {
       return NextResponse.json(
         { error: "serviceId or queueLabel is required" },
@@ -96,7 +119,7 @@ export async function POST(request: Request) {
       try {
         const result = await prisma.$transaction(async (tx) => {
           const ticketsToday = await tx.ticket.findMany({
-            where: { ticketDay },
+            where: { ticketDay, branchId },
             select: { ticketNumber: true },
             take: 5000,
           });
@@ -110,7 +133,9 @@ export async function POST(request: Request) {
               ticketDay,
               ticketNumber,
               queueLabel,
+              phoneNumber,
               status: TicketStatus.waiting,
+              branchId,
             },
           });
           return { ticket, ticketNumber };
@@ -118,6 +143,7 @@ export async function POST(request: Request) {
         const waitingCount = await prisma.ticket.count({
           where: {
             ticketDay,
+            branchId,
             queueLabel,
             status: TicketStatus.waiting,
             createdAt: { lt: result.ticket.createdAt },

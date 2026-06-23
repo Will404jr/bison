@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getTellerSession, isTellerReady } from "@/lib/auth";
+import { getTellerSession, isTellerReady, resolveTellerBranchId } from "@/lib/auth";
 import { TicketStatus } from "@prisma/client";
 
 async function getTicketAndCheckTeller(
   ticketId: string,
-  tellerId: string
+  tellerId: string,
+  branchId: string
 ) {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
   });
   if (!ticket) return null;
   if (ticket.servedByTellerId !== tellerId) return null;
+  if (ticket.branchId !== branchId) return null;
   return ticket;
 }
 
@@ -23,6 +25,10 @@ export async function PATCH(
   if (!session || !isTellerReady(session)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const branchId = await resolveTellerBranchId(session);
+  if (!branchId) {
+    return NextResponse.json({ error: "User is not assigned to a branch" }, { status: 403 });
+  }
   const { id } = await params;
   try {
     const body = await request.json();
@@ -30,7 +36,7 @@ export async function PATCH(
       action?: string;
       targetTellerId?: string;
     };
-    const ticket = await getTicketAndCheckTeller(id, session.tellerId);
+    const ticket = await getTicketAndCheckTeller(id, session.tellerId, branchId);
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
@@ -48,14 +54,24 @@ export async function PATCH(
       return NextResponse.json({ success: true, status: TicketStatus.held });
     }
     if (action === "callAgain") {
+      if (
+        ticket.status !== TicketStatus.serving &&
+        ticket.status !== TicketStatus.held &&
+        ticket.status !== TicketStatus.called
+      ) {
+        return NextResponse.json(
+          { error: "Only active tickets can be called again" },
+          { status: 400 }
+        );
+      }
       await prisma.ticket.update({
         where: { id },
         data: {
-          status: TicketStatus.called,
+          status: TicketStatus.serving,
           callCount: { increment: 1 },
         },
       });
-      return NextResponse.json({ success: true, status: TicketStatus.called });
+      return NextResponse.json({ success: true, status: TicketStatus.serving });
     }
     if (action === "complete") {
       await prisma.ticket.update({
@@ -120,6 +136,22 @@ export async function PATCH(
       });
       if (!target) {
         return NextResponse.json({ error: "Target till not found" }, { status: 404 });
+      }
+      if (!target.userId) {
+        return NextResponse.json(
+          { error: "Target till is not staffed" },
+          { status: 400 }
+        );
+      }
+      const targetUser = await prisma.user.findUnique({
+        where: { id: target.userId },
+        select: { branchId: true },
+      });
+      if (!targetUser || targetUser.branchId !== branchId) {
+        return NextResponse.json(
+          { error: "Cannot redirect to a till at another branch" },
+          { status: 403 }
+        );
       }
       const busy = await prisma.ticket.findFirst({
         where: {
