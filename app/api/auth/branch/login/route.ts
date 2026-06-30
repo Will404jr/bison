@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     const response = NextResponse.json({ success: true });
     response.cookies.set(getBranchSessionCookieName(), token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       sameSite: "lax",
       maxAge: getBranchSessionMaxAge(),
       path: "/",
